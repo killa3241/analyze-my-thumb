@@ -1,40 +1,15 @@
 import json
-from typing import Dict, List
-try:
-    from llama_cpp import Llama
-except ImportError:
-    Llama = None
+import os
+from typing import Dict
+from google import genai
+from google.genai.types import GenerateContentConfig, GoogleSearch
 
-# Placeholder path - assumes GGUF model is already downloaded
-LLAMA_MODEL_PATH = "/path/to/your/quantized_mistral_7b.gguf"
-
-# Global LLM instance (loaded once at startup)
-_llm_instance = None
+from app.models.analysis_models import LLMFeedback
 
 
-def initialize_llm():
-    """Initialize the LLM once at application startup."""
-    global _llm_instance
-    if Llama is None:
-        print("WARNING: llama-cpp-python not installed. Using mock LLM responses.")
-        return
-    
-    try:
-        _llm_instance = Llama(
-            model_path=LLAMA_MODEL_PATH,
-            n_threads=4,
-            n_ctx=2048,
-            verbose=False
-        )
-        print(f"✓ LLM loaded successfully from {LLAMA_MODEL_PATH}")
-    except Exception as e:
-        print(f"WARNING: Failed to load LLM: {e}. Using mock responses.")
-        _llm_instance = None
-
-
-def generate_thumbnail_feedback(analysis_data: Dict) -> Dict[str, any]:
+async def generate_thumbnail_feedback(analysis_data: Dict) -> Dict[str, any]:
     """
-    Generate attractiveness score and suggestions using LLM.
+    Generate attractiveness score and suggestions using Google Gemini API.
     
     Args:
         analysis_data: Dictionary containing all CV/DL metrics
@@ -43,167 +18,108 @@ def generate_thumbnail_feedback(analysis_data: Dict) -> Dict[str, any]:
         Dictionary with 'attractiveness_score' (int) and 'ai_suggestions' (List[str])
     """
     
+    # Get API key from environment
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY environment variable is not set")
+    
+    # Initialize Gemini client
+    client = genai.Client(api_key=api_key)
+    
     # Build structured prompt
     system_prompt = """You are an Expert YouTube Thumbnail Consultant. Analyze the provided metrics and give actionable feedback.
 
-Your response MUST be valid JSON with this exact structure:
-{
-  "attractiveness_score": <number 0-100>,
-  "ai_suggestions": [
-    "suggestion 1",
-    "suggestion 2",
-    "suggestion 3",
-    "suggestion 4",
-    "suggestion 5"
-  ]
-}
+Your task is to:
+1. Evaluate the thumbnail's attractiveness based on proven YouTube best practices
+2. Provide exactly 5 concise, actionable suggestions to improve click-through rate
+3. Focus on: Brightness, Contrast (especially per-object contrast vs background), Text readability, Emotional impact, and Visual hierarchy
 
-Provide exactly 5 concise, actionable suggestions to improve the thumbnail's click-through rate."""
+Consider these factors:
+- Brightness: Optimal range is 80-200 (0=dark, 255=bright)
+- Contrast: Higher is better, especially for key elements vs background
+- Faces with expressive emotions get 38% more clicks
+- Text should be 3-5 words maximum for mobile readability
+- Clear visual hierarchy with one dominant element"""
 
-    user_prompt = f"""Analyze this YouTube thumbnail:
+    # Format metrics as structured JSON
+    metrics_json = json.dumps({
+        "brightness": round(analysis_data.get('brightness', 0), 2),
+        "contrast": round(analysis_data.get('contrast', 0), 2),
+        "dominant_colors": analysis_data.get('dominant_colors', []),
+        "text_content": analysis_data.get('text_content', 'None'),
+        "word_count": analysis_data.get('word_count', 0),
+        "face_count": analysis_data.get('face_count', 0),
+        "detected_emotion": analysis_data.get('detected_emotion', 'N/A'),
+        "detected_objects": [
+            {
+                "label": obj["label"],
+                "confidence": round(obj["confidence"], 2),
+                "contrast_vs_bg": round(obj["contrast_score_vs_bg"], 2)
+            }
+            for obj in analysis_data.get('detected_objects', [])
+        ]
+    }, indent=2)
+    
+    user_prompt = f"""Analyze this YouTube thumbnail based on the following metrics:
 
-METRICS:
-- Brightness: {analysis_data.get('brightness', 0):.2f} (0=dark, 255=bright)
-- Contrast: {analysis_data.get('contrast', 0):.2f} (higher=more contrast)
-- Dominant Colors: {', '.join(analysis_data.get('dominant_colors', []))}
-- Text Content: "{analysis_data.get('text_content', 'None')}" ({analysis_data.get('word_count', 0)} words)
-- Faces Detected: {analysis_data.get('face_count', 0)}
-- Dominant Emotion: {analysis_data.get('detected_emotion', 'N/A')}
-- Detected Objects: {len(analysis_data.get('detected_objects', []))}
+{metrics_json}
 
-OBJECT DETAILS:
-{_format_objects(analysis_data.get('detected_objects', []))}
+Provide your expert analysis with an attractiveness score (0-100) and exactly 5 actionable suggestions."""
 
-Based on best practices for viral YouTube thumbnails, provide your analysis."""
-
-    if _llm_instance is None:
-        # Mock response when LLM not available
-        return _generate_mock_response(analysis_data)
+    # Define response schema for structured output
+    response_schema = {
+        "type": "object",
+        "properties": {
+            "attractiveness_score": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100,
+                "description": "Overall attractiveness score from 0 to 100"
+            },
+            "ai_suggestions": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 5,
+                "maxItems": 5,
+                "description": "Exactly 5 concise, actionable suggestions"
+            }
+        },
+        "required": ["attractiveness_score", "ai_suggestions"]
+    }
     
     try:
-        # Generate response
-        full_prompt = f"{system_prompt}\n\n{user_prompt}"
-        response = _llm_instance(
-            full_prompt,
-            max_tokens=512,
-            temperature=0.7,
-            stop=["</s>", "\n\n\n"]
+        # Generate response with structured output
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-exp",
+            contents=f"{system_prompt}\n\n{user_prompt}",
+            config=GenerateContentConfig(
+                temperature=0.7,
+                response_mime_type="application/json",
+                response_schema=response_schema
+            )
         )
         
-        # Extract and parse JSON
-        response_text = response['choices'][0]['text'].strip()
+        # Parse JSON response
+        result_json = json.loads(response.text)
         
-        # Try to find JSON in response
-        json_start = response_text.find('{')
-        json_end = response_text.rfind('}') + 1
+        # Validate with Pydantic
+        feedback = LLMFeedback(**result_json)
         
-        if json_start >= 0 and json_end > json_start:
-            json_str = response_text[json_start:json_end]
-            result = json.loads(json_str)
-            
-            # Validate structure
-            if 'attractiveness_score' in result and 'ai_suggestions' in result:
-                return {
-                    'attractiveness_score': int(result['attractiveness_score']),
-                    'ai_suggestions': result['ai_suggestions'][:5]  # Ensure max 5
-                }
-        
-        # Fallback if parsing fails
-        return _generate_mock_response(analysis_data)
+        return {
+            'attractiveness_score': feedback.attractiveness_score,
+            'ai_suggestions': feedback.ai_suggestions
+        }
         
     except Exception as e:
-        print(f"LLM generation error: {e}")
-        return _generate_mock_response(analysis_data)
-
-
-def _format_objects(objects: List[Dict]) -> str:
-    """Format detected objects for prompt."""
-    if not objects:
-        return "No objects detected"
-    
-    lines = []
-    for i, obj in enumerate(objects[:10], 1):  # Limit to 10 objects
-        lines.append(
-            f"  {i}. {obj['label']} "
-            f"(confidence: {obj['confidence']:.2f}, "
-            f"contrast vs bg: {obj['contrast_score_vs_bg']:.2f})"
-        )
-    return '\n'.join(lines)
-
-
-def _generate_mock_response(analysis_data: Dict) -> Dict[str, any]:
-    """Generate rule-based mock response when LLM unavailable."""
-    score = 50  # Base score
-    suggestions = []
-    
-    # Brightness scoring
-    brightness = analysis_data.get('brightness', 128)
-    if brightness < 80:
-        score -= 10
-        suggestions.append("Increase overall brightness - thumbnails appear darker on mobile")
-    elif brightness > 200:
-        score -= 5
-        suggestions.append("Reduce excessive brightness to avoid washed-out appearance")
-    else:
-        score += 10
-    
-    # Contrast scoring
-    contrast = analysis_data.get('contrast', 0)
-    if contrast < 30:
-        score -= 15
-        suggestions.append("Boost contrast to make elements pop - use darker backgrounds with brighter subjects")
-    else:
-        score += 10
-    
-    # Face detection
-    face_count = analysis_data.get('face_count', 0)
-    if face_count == 0:
-        suggestions.append("Consider adding a human face - thumbnails with faces get 38% more clicks")
-    elif face_count > 0:
-        score += 15
-        emotion = analysis_data.get('detected_emotion', 'neutral')
-        if emotion in ['happy', 'surprise']:
-            score += 5
-    
-    # Text analysis
-    word_count = analysis_data.get('word_count', 0)
-    if word_count == 0:
-        suggestions.append("Add bold, large text (3-5 words max) highlighting the key benefit")
-    elif word_count > 8:
-        score -= 5
-        suggestions.append("Reduce text to 3-5 impactful words - too much text reduces readability")
-    else:
-        score += 5
-    
-    # Object detection
-    objects = analysis_data.get('detected_objects', [])
-    if len(objects) > 10:
-        suggestions.append("Simplify composition - too many elements create visual clutter")
-    
-    # Per-object contrast
-    low_contrast_objects = [o for o in objects if o.get('contrast_score_vs_bg', 0) < 1.5]
-    if low_contrast_objects:
-        suggestions.append(f"Increase contrast around {low_contrast_objects[0]['label']} - add outline or shadow")
-    
-    # Fill remaining suggestions
-    default_suggestions = [
-        "Use the rule of thirds - position key elements at intersection points",
-        "Test thumbnail at small sizes (120x90px) - it must be readable on mobile",
-        "Add vibrant colors from the complementary color palette",
-        "Create visual hierarchy - make one element clearly dominant",
-        "Use arrows or circles to direct viewer attention to key elements"
-    ]
-    
-    while len(suggestions) < 5:
-        for s in default_suggestions:
-            if s not in suggestions:
-                suggestions.append(s)
-                break
-    
-    # Clamp score
-    score = max(0, min(100, score))
-    
-    return {
-        'attractiveness_score': score,
-        'ai_suggestions': suggestions[:5]
-    }
+        print(f"Gemini API error: {e}")
+        # Return a fallback response instead of failing
+        return {
+            'attractiveness_score': 50,
+            'ai_suggestions': [
+                "Unable to generate AI suggestions - API error occurred",
+                "Ensure your thumbnail has good contrast between elements",
+                "Use bold, large text (3-5 words max) for mobile readability",
+                "Consider adding a human face with expressive emotion",
+                "Test thumbnail at small sizes (120x90px) for mobile visibility"
+            ]
+        }

@@ -10,7 +10,7 @@ from app.core.image_processor import (
     fetch_image_bytes,
     run_full_analysis
 )
-from app.core.llm_generator import initialize_llm, generate_thumbnail_feedback
+from app.core.llm_generator import generate_thumbnail_feedback
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -33,9 +33,6 @@ app.add_middleware(
 async def startup_event():
     """Initialize heavy models once at startup."""
     print("🚀 Initializing Thumblytics API...")
-    
-    # Initialize LLM
-    await run_in_threadpool(initialize_llm)
     
     # TODO: Initialize YOLOv8n model here
     # global _yolo_model
@@ -92,9 +89,9 @@ async def analyze_thumbnail(
         print("🔍 Running CV/DL analysis...")
         analysis_data = await run_in_threadpool(run_full_analysis, image_bytes)
         
-        # Generate LLM feedback
+        # Generate LLM feedback (async)
         print("🤖 Generating AI suggestions...")
-        llm_result = await run_in_threadpool(generate_thumbnail_feedback, analysis_data)
+        llm_result = await generate_thumbnail_feedback(analysis_data)
         
         # Combine results
         final_result = AnalysisResult(

@@ -1,5 +1,10 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List
+
+
+class LLMFeedback(BaseModel):
+    attractiveness_score: int = Field(..., ge=0, le=100, description="The final attractiveness score from 0 to 100.")
+    ai_suggestions: List[str] = Field(..., min_length=5, max_length=5, description="A list of exactly 5 concise, actionable suggestions for improvement.")
 
 
 class ObjectAnalysis(BaseModel):
