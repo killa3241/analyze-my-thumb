@@ -2,7 +2,7 @@
 
 A full-stack application that analyzes YouTube thumbnails using computer vision and AI to provide actionable insights and improvement suggestions.
 
-## 📋 Project Overview
+## Overview
 
 Thumblytics combines computer vision techniques with Google Gemini AI to analyze YouTube thumbnails across multiple dimensions:
 
@@ -12,7 +12,7 @@ Thumblytics combines computer vision techniques with Google Gemini AI to analyze
 - **Emotion Detection**: Face detection and emotion analysis using DeepFace
 - **AI Feedback**: Google Gemini-powered attractiveness scoring and improvement suggestions
 
-## 🏗️ Architecture
+## Architecture
 
 ### Frontend
 - **Framework**: React 18 + TypeScript
@@ -29,9 +29,7 @@ Thumblytics combines computer vision techniques with Google Gemini AI to analyze
 - **AI Integration**: Google Gemini API (gemini-2.0-flash-exp)
 - **Image Processing**: Pillow, NumPy
 
-## 🚀 Getting Started
-
-### Prerequisites
+## Prerequisites
 
 - **Node.js** (v18 or higher) - [Install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
 - **Python** (v3.9 or higher)
@@ -40,26 +38,9 @@ Thumblytics combines computer vision techniques with Google Gemini AI to analyze
   - Ubuntu: `sudo apt-get install tesseract-ocr`
   - Windows: [Download installer](https://github.com/UB-Mannheim/tesseract/wiki)
 
-### Environment Variables
-
-#### Backend
-Create a `.env` file in the `backend` directory:
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-```
-
-Get your Gemini API key from: https://makersuite.google.com/app/apikey
-
-#### Frontend
-The frontend environment variables are automatically configured via Lovable Cloud:
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_PUBLISHABLE_KEY`
-- `VITE_SUPABASE_PROJECT_ID`
-
-## 📦 Installation
+## Installation
 
 ### Frontend Setup
-
 ```bash
 # Clone the repository
 git clone <YOUR_GIT_URL>
@@ -75,7 +56,6 @@ npm run dev
 The frontend will be available at `http://localhost:8080`
 
 ### Backend Setup
-
 ```bash
 # Navigate to backend directory
 cd backend
@@ -91,52 +71,59 @@ venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
+```
 
+#### Backend Requirements (`requirements.txt`)
+```
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+opencv-python==4.9.0.80
+pytesseract==0.3.10
+Pillow==10.2.0
+numpy==1.26.3
+deepface==0.0.87
+scikit-learn==1.4.0
+google-genai==0.2.2
+httpx==0.26.0
+python-dotenv==1.0.0
+```
+```bash
 # Start FastAPI server
 python -m app.main
 ```
 
 The backend API will be available at `http://localhost:8000`
 
-## 🔧 Development Commands
+## Configuration
 
-### Frontend
+### Backend Environment Variables
 
-```bash
-# Start development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Preview production build
-npm run preview
-
-# Lint code
-npm run lint
+Create a `.env` file in the `backend` directory:
+```env
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
-### Backend
+Obtain your Gemini API key from: https://makersuite.google.com/app/apikey
 
-```bash
-# Run FastAPI with auto-reload
-uvicorn app.main:app --reload
+### Frontend Environment Variables
 
-# Run with custom host/port
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
+The frontend environment variables are automatically configured via Lovable Cloud:
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_SUPABASE_PROJECT_ID`
 
-## 📡 API Endpoints
+## API Documentation
 
 ### `POST /analyze-thumbnail`
 
 Analyzes a YouTube thumbnail from URL or uploaded file.
 
-**Request:**
+**Request Parameters:**
 - `youtube_url` (optional): YouTube video URL
 - `file` (optional): Direct image file upload
 
-**Response:**
+**Response Schema:**
 ```json
 {
   "average_brightness": 128.5,
@@ -157,48 +144,31 @@ Analyzes a YouTube thumbnail from URL or uploaded file.
   "attractiveness_score": 78,
   "ai_suggestions": [
     "Increase text size for better readability",
-    "Add more contrast between subject and background",
-    "Consider warmer color palette",
-    "Optimize face positioning in rule of thirds",
-    "Simplify background elements"
+    "Add more contrast between subject and background"
   ]
 }
 ```
 
-## 🔑 Key Features
+## Development
 
-1. **Multi-Source Analysis**: Accept YouTube URLs or direct file uploads
-2. **Comprehensive Metrics**: 10+ visual and content metrics
-3. **AI-Powered Insights**: Context-aware suggestions using Gemini AI
-4. **Structured Output**: Strictly validated JSON responses via Pydantic
-5. **Async Processing**: Non-blocking analysis for better performance
+### Frontend Commands
+```bash
+npm run dev      # Start development server
+npm run build    # Build for production
+npm run preview  # Preview production build
+npm run lint     # Lint code
+```
 
-## 🛠️ Technologies Used
+### Backend Commands
+```bash
+# Run with auto-reload
+uvicorn app.main:app --reload
 
-### Frontend Stack
-- React 18.3.1
-- TypeScript
-- Vite
-- Tailwind CSS
-- shadcn-ui
-- TanStack Query
-- Supabase Client
-- React Router DOM
-- Recharts (for data visualization)
+# Run with custom host/port
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
 
-### Backend Stack
-- FastAPI 0.109.0
-- OpenCV 4.9.0
-- PyTesseract 0.3.10
-- DeepFace 0.0.87
-- Google Gemini AI (google-genai 0.2.2)
-- Pillow 10.2.0
-- NumPy 1.26.3
-- scikit-learn 1.4.0
-- httpx 0.26.0
-
-## 📁 Project Structure
-
+## Project Structure
 ```
 .
 ├── backend/
@@ -223,48 +193,38 @@ Analyzes a YouTube thumbnail from URL or uploaded file.
 └── README.md
 ```
 
-## 🚢 Deployment
+## Deployment
 
-### Frontend Deployment
-This project is deployed via Lovable:
-1. Click the **Publish** button in the Lovable editor
-2. Your app will be available at `yoursite.lovable.app`
-3. Connect a custom domain in Project > Settings > Domains (requires paid plan)
+### Frontend
+Deploy via Lovable by clicking the **Publish** button in the editor. Your application will be available at `yoursite.lovable.app`. Custom domains can be configured in Project > Settings > Domains (paid plan required).
 
-### Backend Deployment
-The FastAPI backend needs to be deployed separately on platforms like:
-- **Railway**: https://railway.app
-- **Render**: https://render.com
-- **DigitalOcean App Platform**: https://www.digitalocean.com/products/app-platform
-- **Google Cloud Run**: https://cloud.google.com/run
-- **AWS Elastic Beanstalk**: https://aws.amazon.com/elasticbeanstalk
+### Backend
+Deploy the FastAPI backend on platforms such as:
+- Railway (https://railway.app)
+- Render (https://render.com)
+- DigitalOcean App Platform
+- Google Cloud Run
+- AWS Elastic Beanstalk
 
-## 📝 License
+Ensure environment variables are properly configured in your deployment platform.
+
+## Troubleshooting
+
+### Tesseract Not Found Error
+Ensure Tesseract is installed and accessible in your system PATH. Windows users may need to set the path explicitly in the code.
+
+### GEMINI_API_KEY Not Set
+Verify that a `.env` file exists in the `backend` directory with a valid Gemini API key.
+
+### CORS Errors
+The backend allows all origins in development mode. Update CORS settings in `backend/app/main.py` for production deployments.
+
+## License
 
 This project was built with [Lovable](https://lovable.dev)
 
-## 🔗 Useful Links
+## Resources
 
-- [Lovable Documentation](https://docs.lovable.dev/)
-- [Lovable Project URL](https://lovable.dev/projects/744d8771-2b0d-44e6-9c36-6ea0d68fc64d)
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [Google Gemini API](https://ai.google.dev/)
-
-## 🐛 Troubleshooting
-
-### Tesseract Not Found Error
-If you get a "Tesseract not found" error:
-- Ensure Tesseract is installed and in your PATH
-- On Windows, you may need to set the path explicitly in code
-
-### GEMINI_API_KEY Not Set
-Make sure you've created a `.env` file in the `backend` directory with your Gemini API key.
-
-### CORS Errors
-The backend is configured to allow all origins in development. For production, update the CORS settings in `backend/app/main.py`.
-
-## 💡 Support
-
-For issues and questions:
-- Check the [Lovable Documentation](https://docs.lovable.dev/)
-- Join the [Lovable Discord Community](https://discord.com/channels/1119885301872070706/1280461670979993613)
+- [Lovable Documentation](https://docs.lovable.dev/)
