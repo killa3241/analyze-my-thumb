@@ -1,0 +1,44 @@
+# ------------------------------------
+# 1. PYTHON VIRTUAL ENVIRONMENT
+# ------------------------------------
+# Ignore the standard virtual environment directory
+venv/
+.venv/
+env/
+.env/
+
+# ------------------------------------
+# 2. ENVIRONMENT VARIABLES & SECRETS
+# ------------------------------------
+# Ignore environment variable files containing API keys and secrets.
+.env
+.env.*
+!.env.example # OPTIONAL: Un-ignore if you have a template file
+
+# ------------------------------------
+# 3. PYTHON CACHE/BUILD FILES
+# ------------------------------------
+# Ignore compiled Python files
+__pycache__/
+*.pyc
+
+# Ignore testing/coverage directories
+.pytest_cache/
+htmlcov/
+.coverage
+
+# ------------------------------------
+# 4. OPERATING SYSTEM & IDE FILES
+# ------------------------------------
+# Windows
+Thumbs.db
+Desktop.ini
+
+# VS Code
+.vscode/
+
+# Jupyter/IPython Notebooks
+.ipynb_checkpoints
+
+# Uvicorn/FastAPI specific cache
+.mypy_cache/
