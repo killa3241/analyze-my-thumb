@@ -12,6 +12,8 @@ Thumblytics combines computer vision techniques with Google Gemini AI to analyze
 - **Emotion Detection**: Face detection and emotion analysis using DeepFace
 - **AI Feedback**: Google Gemini-powered attractiveness scoring and improvement suggestions
 
+---
+
 ## Architecture
 
 ### Frontend
@@ -29,18 +31,23 @@ Thumblytics combines computer vision techniques with Google Gemini AI to analyze
 - **AI Integration**: Google Gemini API (gemini-2.0-flash-exp)
 - **Image Processing**: Pillow, NumPy
 
+---
+
 ## Prerequisites
 
 - **Node.js** (v18 or higher) - [Install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-- **Python** (v3.9 or higher)
+- **Python** (**v3.12.x is highly recommended for dependency stability**) 
 - **Tesseract OCR** - Required for text extraction
   - macOS: `brew install tesseract`
   - Ubuntu: `sudo apt-get install tesseract-ocr`
   - Windows: [Download installer](https://github.com/UB-Mannheim/tesseract/wiki)
 
+---
+
 ## Installation
 
 ### Frontend Setup
+
 ```bash
 # Clone the repository
 git clone <YOUR_GIT_URL>
@@ -53,53 +60,77 @@ npm install
 npm run dev
 ```
 
-The frontend will be available at `http://localhost:8080`
+The frontend will be available at http://localhost:8080
 
 ### Backend Setup
+
+**Note:** For stable dependency resolution (OpenCV, DeepFace, TensorFlow), you must use Python 3.12.
+
 ```bash
 # Navigate to backend directory
 cd backend
 
-# Create virtual environment
-python -m venv venv
+# Create virtual environment using Python 3.12
+# On Windows, using the launcher (if py is on PATH):
+py -3.12 -m venv venv
 
 # Activate virtual environment
 # On macOS/Linux:
 source venv/bin/activate
-# On Windows:
-venv\Scripts\activate
+
+# On Windows (PowerShell):
+.\venv\Scripts\Activate.ps1
 
 # Install dependencies
 pip install -r requirements.txt
 ```
 
-#### Backend Requirements (`requirements.txt`)
-```
+### Backend Requirements (requirements.txt)
+
+**Note:** TensorFlow 2.20.0 requires the explicit installation of tf-keras on Python 3.12. NumPy is pinned to 1.x for OpenCV stability.
+
+```txt
+# ================================
+# Computer Vision & ML Core
+# ================================
+# CRITICAL: NumPy 1.x is required for stable OpenCV 4.9.x on Python 3.12
+numpy==1.26.4
+opencv-python==4.9.0.80
+scikit-learn==1.5.1
+
+# CRITICAL: TensorFlow 2.20.0 requires tf-keras for Keras 3 compatibility on Python 3.12
+tensorflow==2.20.0
+tf-keras
+deepface==0.0.87
+Pillow==11.3.0
+
+# ================================
+# Web/API Dependencies
+# ================================
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
 python-multipart==0.0.6
-opencv-python==4.9.0.80
 pytesseract==0.3.10
-Pillow==10.2.0
-numpy==1.26.3
-deepface==0.0.87
-scikit-learn==1.4.0
 google-genai==0.2.2
 httpx==0.26.0
 python-dotenv==1.0.0
 ```
+
 ```bash
-# Start FastAPI server
-python -m app.main
+# Start FastAPI server (Use the venv's Python executable explicitly for stability)
+.\venv\Scripts\python.exe -m uvicorn app.main:app --reload
 ```
 
-The backend API will be available at `http://localhost:8000`
+The backend API will be available at http://localhost:8000
+
+---
 
 ## Configuration
 
 ### Backend Environment Variables
 
-Create a `.env` file in the `backend` directory:
+Create a `.env` file in the backend directory:
+
 ```env
 GEMINI_API_KEY=your_gemini_api_key_here
 ```
@@ -109,21 +140,26 @@ Obtain your Gemini API key from: https://makersuite.google.com/app/apikey
 ### Frontend Environment Variables
 
 The frontend environment variables are automatically configured via Lovable Cloud:
+
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 - `VITE_SUPABASE_PROJECT_ID`
 
+---
+
 ## API Documentation
 
-### `POST /analyze-thumbnail`
+### POST /analyze-thumbnail
 
 Analyzes a YouTube thumbnail from URL or uploaded file.
 
 **Request Parameters:**
+
 - `youtube_url` (optional): YouTube video URL
 - `file` (optional): Direct image file upload
 
 **Response Schema:**
+
 ```json
 {
   "average_brightness": 128.5,
@@ -149,9 +185,12 @@ Analyzes a YouTube thumbnail from URL or uploaded file.
 }
 ```
 
+---
+
 ## Development
 
 ### Frontend Commands
+
 ```bash
 npm run dev      # Start development server
 npm run build    # Build for production
@@ -160,15 +199,19 @@ npm run lint     # Lint code
 ```
 
 ### Backend Commands
+
 ```bash
-# Run with auto-reload
-uvicorn app.main:app --reload
+# Run with auto-reload (using venv Python is recommended)
+.\venv\Scripts\python.exe -m uvicorn app.main:app --reload
 
 # Run with custom host/port
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+.\venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+---
+
 ## Project Structure
+
 ```
 .
 ├── backend/
@@ -193,13 +236,18 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 └── README.md
 ```
 
+---
+
 ## Deployment
 
 ### Frontend
-Deploy via Lovable by clicking the **Publish** button in the editor. Your application will be available at `yoursite.lovable.app`. Custom domains can be configured in Project > Settings > Domains (paid plan required).
+
+Deploy via Lovable by clicking the Publish button in the editor. Your application will be available at yoursite.lovable.app. Custom domains can be configured in Project > Settings > Domains (paid plan required).
 
 ### Backend
+
 Deploy the FastAPI backend on platforms such as:
+
 - Railway (https://railway.app)
 - Render (https://render.com)
 - DigitalOcean App Platform
@@ -208,23 +256,32 @@ Deploy the FastAPI backend on platforms such as:
 
 Ensure environment variables are properly configured in your deployment platform.
 
+---
+
 ## Troubleshooting
 
 ### Tesseract Not Found Error
 Ensure Tesseract is installed and accessible in your system PATH. Windows users may need to set the path explicitly in the code.
 
 ### GEMINI_API_KEY Not Set
-Verify that a `.env` file exists in the `backend` directory with a valid Gemini API key.
+Verify that a `.env` file exists in the backend directory with a valid Gemini API key.
 
 ### CORS Errors
 The backend allows all origins in development mode. Update CORS settings in `backend/app/main.py` for production deployments.
 
+### Python Version Conflicts
+If you encounter dependency errors (e.g., NumPy, TensorFlow), ensure your virtual environment was created with Python 3.12.x, as described in the Backend Setup section.
+
+---
+
 ## License
 
-This project was built with [Lovable](https://lovable.dev)
+This project was built with Lovable
+
+---
 
 ## Resources
 
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
-- [Google Gemini API](https://ai.google.dev/)
+- [Google Gemini API](https://makersuite.google.com/)
 - [Lovable Documentation](https://docs.lovable.dev/)

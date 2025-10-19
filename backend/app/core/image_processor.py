@@ -9,20 +9,17 @@ from PIL import Image
 from typing import Optional, Dict, List
 from sklearn.cluster import KMeans
 import httpx
-from io import BytesIO
+import pytesseract
 
-# --- DeepFace Import ---
+# Set the path to your Tesseract executable here
+# Replace the path with the exact folder where tesseract.exe is located on your machine.
+TESSERACT_EXECUTABLE_PATH = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
 try:
-    # We rely on DeepFace and its dependencies being installed correctly
-    from deepface import DeepFace
-except ImportError:
-    # Fallback structure for DeepFace if import fails
-    DeepFace = None
-    print("WARNING: DeepFace not imported. Face detection will use mock data.")
-
-# Placeholder for YOLOv8n - Actual model loading is often complex, using mock for now
-_yolo_model = None 
-
+    pytesseract.pytesseract.tesseract_cmd = TESSERACT_EXECUTABLE_PATH
+except AttributeError:
+    # This may fail if the module isn't ready; ensure installation first.
+    pass
 
 # -----------------------------------------------------------
 # CORE UTILITY FUNCTIONS (CV/Image Processing)
@@ -48,8 +45,7 @@ def extract_youtube_thumbnail_url(youtube_url: str) -> Optional[str]:
 async def fetch_image_bytes(url: str) -> bytes:
     """Fetch image bytes from URL."""
     async with httpx.AsyncClient() as client:
-        # Use a longer timeout for fetching large thumbnails
-        response = await client.get(url, timeout=20.0) 
+        response = await client.get(url, timeout=20.0)
         response.raise_for_status()
         return response.content
 
@@ -73,8 +69,7 @@ def extract_dominant_colors(img_array: np.ndarray, n_colors: int = 5) -> List[st
     small = cv2.resize(img_array, (100, 100))
     pixels = small.reshape(-1, 3)
     
-    # K-means initialization suppression
-    kmeans = KMeans(n_clusters=n_colors, random_state=42, n_init=10) 
+    kmeans = KMeans(n_clusters=n_colors, random_state=42, n_init=10)
     kmeans.fit(pixels)
     
     colors = []
@@ -86,93 +81,14 @@ def extract_dominant_colors(img_array: np.ndarray, n_colors: int = 5) -> List[st
 
 
 # -----------------------------------------------------------
-# DEEP LEARNING / MOCK FUNCTIONS
+# HYBRID TEXT EXTRACTION (PyTesseract + Gemini Bounds)
 # -----------------------------------------------------------
 
-def calculate_object_contrast(img_array: np.ndarray, bbox: List[int]) -> float:
-    """MOCK/Placeholder: Calculate Weber contrast of the object vs. its background."""
-    # In a real scenario, this involves complex region analysis.
-    # For now, return a placeholder score.
-    return 0.75 
-
-
-def detect_objects_yolo(img_array: np.ndarray) -> List[Dict]:
-    """
-    MOCK Object Detection: Placeholder for YOLOv8n inference.
-    
-    Args:
-        img_array: The image data.
-        
-    Returns:
-        List of detected objects with label, confidence, bbox, and contrast.
-    """
-    # NOTE: If you install ultralytics and uncomment the global model loading, 
-    # replace this function with your actual YOLO inference code.
-    
-    # Mock data for reliable API testing:
-    return [
-        {
-            'label': 'person',
-            'confidence': 0.98,
-            'bbox': [100, 50, 450, 700], # [xmin, ymin, xmax, ymax]
-            'contrast_score_vs_bg': calculate_object_contrast(img_array, [100, 50, 450, 700])
-        },
-        {
-            'label': 'text_overlay',
-            'confidence': 0.85,
-            'bbox': [500, 750, 950, 950],
-            'contrast_score_vs_bg': calculate_object_contrast(img_array, [500, 750, 950, 950])
-        }
-    ]
-
-
-def detect_faces_and_emotion(img_array: np.ndarray) -> Dict[str, any]:
-    """
-    Detects faces and determines the dominant emotion using DeepFace.
-    """
-    if DeepFace is None:
-        print("MOCK: DeepFace not available. Using mock emotion data.")
-        return {'face_count': 1, 'detected_emotion': 'happy'}
-
-    try:
-        # DeepFace uses BGR, so convert from our internal RGB array
-        img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR) 
-
-        # We only need analysis for faces and emotion
-        analysis = DeepFace.analyze(
-            img_path=img_bgr,
-            actions=('face', 'emotion'),
-            detector_backend='retinaface', # Often works well for thumbnails
-            enforce_detection=False # Don't raise error if no face found
-        )
-        
-        if not analysis or isinstance(analysis, list) and not analysis[0]:
-            return {'face_count': 0, 'detected_emotion': None}
-
-        # DeepFace returns a list of dictionaries for multiple faces
-        first_face = analysis[0]
-        
-        return {
-            'face_count': len(analysis),
-            'detected_emotion': first_face['dominant_emotion']
-        }
-        
-    except Exception as e:
-        print(f"DeepFace analysis failed: {e}")
-        # Return fallback data on failure
-        return {'face_count': 0, 'detected_emotion': 'Neutral'} 
-
-
-# -----------------------------------------------------------
-# CRITICAL HYBRID TEXT EXTRACTION FUNCTION (PyTesseract + Gemini Bounds)
-# -----------------------------------------------------------
-
-def crop_and_extract_text(img_array: np.ndarray, gemini_text_bounds: List[Dict]) -> Dict[str, any]:
+def crop_and_extract_text(img_array: np.ndarray, gemini_text_bounds: Dict) -> Dict[str, any]:
     """
     Crops image based on Gemini's normalized bounding boxes and runs Tesseract 
     on the aggregated, cropped region for accurate text extraction.
     """
-    # The required gemini_text_bounds argument is passed by main.py
     if not gemini_text_bounds or not gemini_text_bounds.get('detected_text_blocks'):
         return {'text_content': 'None', 'word_count': 0, 'cropped_image_bytes': b''}
 
@@ -204,7 +120,7 @@ def crop_and_extract_text(img_array: np.ndarray, gemini_text_bounds: List[Dict])
     cropped_img_array = img_array[final_y1:final_y2, final_x1:final_x2].copy()
     
     if cropped_img_array.size == 0:
-          return {'text_content': 'None', 'word_count': 0, 'cropped_image_bytes': b''}
+        return {'text_content': 'None', 'word_count': 0, 'cropped_image_bytes': b''}
 
     # 3. Preprocess for OCR
     gray = cv2.cvtColor(cropped_img_array, cv2.COLOR_RGB2GRAY)
@@ -229,17 +145,18 @@ def crop_and_extract_text(img_array: np.ndarray, gemini_text_bounds: List[Dict])
 
 
 # -----------------------------------------------------------
-# MAIN ANALYSIS ENTRY POINT
+# MAIN ANALYSIS ENTRY POINT (CV Metrics Only)
 # -----------------------------------------------------------
 
 def run_full_analysis(image_bytes: bytes, gemini_text_bounds: Dict) -> Dict:
     """
-    Synchronous function that performs complete CV/DL analysis.
+    Synchronous function that performs CV analysis only.
+    Object detection, face detection, and emotion analysis are now handled by Gemini.
     Called from main.py and expected to run in a threadpool.
     """
     # Load image (Convert to NumPy array, RGB format)
     img = Image.open(io.BytesIO(image_bytes))
-    img_array = np.array(img.convert('RGB')) 
+    img_array = np.array(img.convert('RGB'))
     
     # 1. Brightness & Contrast
     brightness_contrast = calculate_brightness_contrast(img_array)
@@ -250,26 +167,14 @@ def run_full_analysis(image_bytes: bytes, gemini_text_bounds: Dict) -> Dict:
     # 3. Targeted Text Extraction (uses Gemini bounds)
     text_data = crop_and_extract_text(img_array, gemini_text_bounds)
     
-    # 4. Object Detection with Per-Object Contrast (MOCK/REAL)
-    detected_objects = detect_objects_yolo(img_array)
-    
-    # 5. Face & Emotion Detection (DEEPFACE/MOCK)
-    face_emotion = detect_faces_and_emotion(img_array)
-    
-    # Combine all metrics
+    # Return only CV metrics - object/face/emotion data will be added by main.py
     analysis_result = {
         'average_brightness': brightness_contrast['average_brightness'],
         'contrast_level': brightness_contrast['contrast_level'],
         'dominant_colors': dominant_colors,
-        
-        # Text data includes the cropped bytes for the final Gemini step
         'text_content': text_data['text_content'],
         'word_count': text_data['word_count'],
-        'cropped_image_bytes': text_data['cropped_image_bytes'], 
-        
-        'face_count': face_emotion['face_count'],
-        'detected_emotion': face_emotion['detected_emotion'],
-        'detected_objects': detected_objects
+        'cropped_image_bytes': text_data['cropped_image_bytes']
     }
     
     return analysis_result
