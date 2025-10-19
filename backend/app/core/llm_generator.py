@@ -1,9 +1,13 @@
+# backend/app/core/llm_generator.py
+
 import json
 import os
-from typing import Dict
+from typing import Dict, List, Tuple, Optional
 from google import genai
 from google.genai import types
-from app.models.analysis_models import LLMFeedback, GeminiTextDetection, GeminiAllDetection
+from io import BytesIO
+
+from app.models.analysis_models import LLMFeedback, GeminiAllDetection 
 
 # --- Constants & Initialization ---
 API_KEY = os.getenv("GEMINI_API_KEY")
@@ -66,75 +70,76 @@ def get_clean_schema_for_gemini(pydantic_model):
 
 
 # ----------------------------------------------------------------------
-# 1. TEXT DETECTION FUNCTION
-# ----------------------------------------------------------------------
-TEXT_DETECTION_SYSTEM_INSTRUCTION = (
-    "You are an expert computer vision model specializing in YouTube thumbnail text detection. "
-    "Your sole task is to accurately identify all distinct, human-readable text blocks in the image, "
-    "ignoring small artifacts or watermarks. "
-    "Provide the bounding box coordinates [xmin, ymin, xmax, ymax] normalized to a 0-1000 scale "
-    "based on the image's dimensions. The 'text_label' field must contain the exact, case-sensitive text found in that box. "
-    "Return a JSON object with a 'detected_text_blocks' array. Each item must have 'box_normalized' (array of 4 integers) "
-    "and 'text_label' (string). If no text is found, return an empty array."
-)
-
-
-def get_text_bounds_from_gemini(image_bytes: bytes) -> Dict:
-    """
-    Uses Gemini to identify text regions and return structured bounding box data.
-    Returns a dictionary to avoid schema conflicts.
-    """
-    image_part = types.Part.from_bytes(data=image_bytes, mime_type='image/jpeg')
-    
-    # Create a clean schema without problematic fields
-    clean_schema = get_clean_schema_for_gemini(GeminiTextDetection)
-    
-    config = types.GenerateContentConfig(
-        system_instruction=TEXT_DETECTION_SYSTEM_INSTRUCTION,
-        response_mime_type="application/json",
-        response_schema=clean_schema,
-        temperature=0.0
-    )
-
-    try:
-        response = client.models.generate_content(
-            model='gemini-2.0-flash-exp',
-            contents=[image_part],
-            config=config
-        )
-        
-        result = json.loads(response.text)
-        
-        if "detected_text_blocks" not in result:
-            print("⚠️ Gemini response missing 'detected_text_blocks', returning empty")
-            return {"detected_text_blocks": []}
-        
-        return result
-        
-    except Exception as e:
-        print(f"❌ Gemini text detection error: {e}")
-        return {"detected_text_blocks": []}
-
-
-# ----------------------------------------------------------------------
-# 2. OBJECT & EMOTION DETECTION FUNCTION
+# 1. COMPREHENSIVE DETECTION FUNCTION (Phase 1)
 # ----------------------------------------------------------------------
 
 DETECTION_SYSTEM_INSTRUCTION = (
-    "You are a hyper-accurate Computer Vision analysis tool. Your sole purpose is to locate and label "
-    "critical visual elements in the thumbnail. "
-    "Identify and label all: **1) Faces**, **2) Text Overlays**, and **3) Main Objects** (e.g., zombie, baseball bat). "
-    "For every face detected, infer the dominant **emotion** from a commercial thumbnail perspective. "
-    "Use expressive labels like: **'Shocked', 'Excited', 'Determined', 'Smirking', 'Angry', or 'Fear'**. "
-    "If the emotion is weak, use 'Neutral'. Place this in the 'emotion' field. "
-    "Return the output in the requested JSON schema. All coordinates must be normalized to a 0-1000 scale."
+    "You are a hyper-accurate Computer Vision analysis tool specializing in YouTube thumbnail analysis. "
+    "Your PRIMARY task is to identify and precisely locate ALL critical visual elements.\n\n"
+    
+    "**MANDATORY DETECTION CATEGORIES:**\n"
+    "1. **FACES** - Detect ALL human faces/persons with high precision\n"
+    "   - For EACH face, you MUST infer the dominant emotion\n"
+    "   - Emotion labels: 'Shocked', 'Excited', 'Determined', 'Smirking', 'Angry', 'Fear', 'Happy', 'Sad', 'Surprised', 'Neutral'\n"
+    "   - Label as 'face' or 'person'\n"
+    "   - Include partial faces if visible\n\n"
+    
+    "2. **TEXT OVERLAYS** - All text regions (titles, captions, labels)\n"
+    "   - Label as 'text_overlay' or include descriptive text label\n\n"
+    
+    "3. **MAIN OBJECTS** - Key visual elements that are CRITICAL to detect:\n"
+    "   - **Animals** (elephant, lion, tiger, dog, cat, bird, dinosaur, fish, snake, etc.)\n"
+    "   - **Logos and brands** (YouTube logo, OpenAI logo, company logos, brand marks)\n"
+    "   - **Products and items** (phones, cameras, laptops, tools, weapons, gadgets, equipment)\n"
+    "   - **Vehicles** (cars, planes, bikes, ships, trucks, motorcycles)\n"
+    "   - **Natural elements** (fire, flames, water, mountains, trees, clouds, lightning)\n"
+    "   - **Characters and creatures** (zombies, robots, monsters, aliens, superheroes)\n"
+    "   - **Sports equipment** (soccer ball, basketball, baseball bat, tennis racket)\n"
+    "   - **Visual effects and props** (arrows, circles, highlights, explosions, sparkles)\n"
+    "   - **Food items** (pizza, burger, cake, etc.)\n"
+    "   - Use descriptive, specific labels (e.g., 'elephant', 'baseball bat', 'fire effect', 'zombie character')\n\n"
+    
+    "**CRITICAL REQUIREMENTS:**\n"
+    "- ALL bounding boxes MUST be normalized to 0-1000 scale (NOT 0-1, NOT pixel coordinates)\n"
+    "- Provide accurate confidence scores (0.0-1.0)\n"
+    "- For faces: emotion field is MANDATORY\n"
+    "- DO NOT skip large, prominent objects - elephants, cars, logos MUST be detected\n"
+    "- If an animal or object occupies >20% of the image, it MUST be in your response\n"
+    "- Return valid JSON matching the exact schema provided\n"
+    "- Prioritize detecting ALL visible elements, especially main subjects\n"
+    "- When in doubt, include the object rather than excluding it\n\n"
+    
+    "**EXAMPLE OUTPUT:**\n"
+    "For a thumbnail with an elephant and text:\n"
+    "{\n"
+    "  \"detected_objects\": [\n"
+    "    {\n"
+    "      \"label\": \"elephant\",\n"
+    "      \"bbox_normalized\": [200, 400, 800, 900],\n"
+    "      \"confidence\": 0.92\n"
+    "    },\n"
+    "    {\n"
+    "      \"label\": \"text_overlay\",\n"
+    "      \"bbox_normalized\": [300, 50, 700, 150],\n"
+    "      \"confidence\": 0.88\n"
+    "    }\n"
+    "  ],\n"
+    "  \"face_count\": 0,\n"
+    "  \"detected_emotion\": null\n"
+    "}"
 )
 
 
 def get_all_detection_data(image_bytes: bytes) -> Dict:
     """
-    Uses Gemini to detect objects, faces, and emotions.
-    Returns a dictionary with detected_objects, face_count, and detected_emotion.
+    Uses Gemini to identify ALL objects, faces, and text regions.
+    Returns a clean dictionary for main.py to process.
+    
+    Args:
+        image_bytes: Raw image bytes
+    
+    Returns:
+        Dictionary containing detected_objects list and face metadata
     """
     image_part = types.Part.from_bytes(data=image_bytes, mime_type='image/jpeg')
     
@@ -157,18 +162,56 @@ def get_all_detection_data(image_bytes: bytes) -> Dict:
         
         result = json.loads(response.text)
         
-        # Validate expected structure
+        # Ensure the result has the expected structure
         if "detected_objects" not in result:
+            print("⚠️ Gemini returned result without 'detected_objects' key")
             result["detected_objects"] = []
-        if "face_count" not in result:
-            result["face_count"] = 0
-        if "detected_emotion" not in result:
-            result["detected_emotion"] = None
+        
+        # Calculate face count and dominant emotion from detected objects
+        faces = [
+            obj for obj in result["detected_objects"] 
+            if obj.get("label", "").lower() in ["face", "person", "human"]
+        ]
+        result["face_count"] = len(faces)
+        
+        # Get dominant emotion from the first face if available
+        dominant_emotion = None
+        if faces:
+            # Prioritize faces with emotions
+            for face in faces:
+                if face.get("emotion") and face["emotion"].lower() != "neutral":
+                    dominant_emotion = face["emotion"]
+                    break
+            # Fallback to first face emotion if all are neutral
+            if not dominant_emotion and faces[0].get("emotion"):
+                dominant_emotion = faces[0]["emotion"]
+        
+        result["detected_emotion"] = dominant_emotion
+        
+        print(f"✅ Gemini detection successful: {len(result['detected_objects'])} objects, {result['face_count']} faces")
+        if faces:
+            print(f"   👤 Faces detected with emotions: {[f.get('emotion', 'Unknown') for f in faces]}")
+        
+        # Log all detected objects for debugging
+        if result['detected_objects']:
+            print(f"   🎯 All detected elements:")
+            for obj in result['detected_objects']:
+                label = obj.get('label', 'unknown')
+                confidence = obj.get('confidence', 0)
+                print(f"      - {label} (confidence: {confidence:.2f})")
         
         return result
         
+    except json.JSONDecodeError as e:
+        print(f"❌ Gemini response JSON parsing error: {e}")
+        print(f"Raw response: {response.text if 'response' in locals() else 'No response'}")
+        return {
+            "detected_objects": [],
+            "face_count": 0,
+            "detected_emotion": None
+        }
     except Exception as e:
-        print(f"❌ Gemini detection error: {e}")
+        print(f"❌ Gemini all detection error: {e}")
         return {
             "detected_objects": [],
             "face_count": 0,
@@ -177,87 +220,118 @@ def get_all_detection_data(image_bytes: bytes) -> Dict:
 
 
 # ----------------------------------------------------------------------
-# 3. FINAL FEEDBACK FUNCTION
+# 2. FINAL FEEDBACK FUNCTION (Phase 2)
 # ----------------------------------------------------------------------
+
 def generate_final_feedback(
     image_bytes: bytes,
     analysis_data: Dict
 ) -> Dict[str, any]:
     """
-    Generate attractiveness score and suggestions using Google Gemini API.
-    This is a synchronous function that will be called via run_in_threadpool.
+    Generates attractiveness score and suggestions using the final, processed data.
+    
+    Args:
+        image_bytes: Raw image bytes
+        analysis_data: Dictionary containing all CV metrics and detection results
+    
+    Returns:
+        Dictionary with 'attractiveness_score' and 'ai_suggestions'
     """
-    system_prompt = """You are an Expert YouTube Thumbnail Consultant. Analyze the provided visual and quantitative metrics to deliver actionable feedback.
+    
+    # ----------------------------------------------------------------
+    # DYNAMIC LABEL EXTRACTION: Inject specific object names into the prompt
+    # ----------------------------------------------------------------
+    detected_faces = analysis_data.get('detected_faces', [])
+    detected_objects = analysis_data.get('detected_objects', [])
+    
+    # Construct dynamic narrative critique points for faces
+    if len(detected_faces) >= 2:
+        face_narrative = (
+            f"Face 1 ({detected_faces[0].get('emotion', 'Unknown')} emotion, {detected_faces[0].get('position', 'unknown position')}): "
+            f"Visually inspect and define a high-impact emotion.\n"
+            f"Face 2 ({detected_faces[1].get('emotion', 'Unknown')} emotion, {detected_faces[1].get('position', 'unknown position')}): "
+            f"Visually inspect and define a high-impact emotion.\n"
+            "- **Critique the emotional disparity between the two subjects using specific marketing psychology principles.**"
+        )
+    elif len(detected_faces) == 1:
+        face_narrative = (
+            f"Face 1 ({detected_faces[0].get('emotion', 'Unknown')} emotion, {detected_faces[0].get('position', 'unknown position')}): "
+            f"Visually inspect and define a high-impact emotion."
+        )
+    else:
+        face_narrative = "No prominent faces detected. Focus on object composition and text readability."
+    
+    # ----------------------------------------------------------------
+    # SYSTEM PROMPT: Maximally Refined
+    # ----------------------------------------------------------------
+    system_prompt = """You are an Elite YouTube Thumbnail Optimization AI. Your suggestions MUST be data-driven, highly specific, and focused exclusively on optimizing the Click-Through Rate (CTR) and visual psychology.
 
-Your task is to:
-1. Evaluate the thumbnail's attractiveness based on proven YouTube best practices.
-2. Provide exactly 5 concise, actionable suggestions to improve click-through rate.
-3. Focus on: Brightness, Overall Contrast, Text readability (font, size, contrast, word count), Emotional impact, and Visual hierarchy.
-
-Consider these industry best practices:
-- Brightness: Optimal range is 80-200 (0=dark, 255=bright).
-- Contrast: A high Weber contrast (especially for key objects vs. background) is critical for small screens.
-- Faces with clear, expressive emotions get significantly higher engagement.
-- Text should be 3-5 words maximum for mobile readability."""
+    CRITICAL INSTRUCTIONS:
+    1. Provide an objective attractiveness score (0-100).
+    2. Generate exactly 5 concise, actionable suggestions.
+    3. **MANDATORY EXCLUSIONS:** Do NOT use the words 'vignette', 'sharpen', 'brightness', or 'highlight' as core verbs. Use professional, marketing-focused terms instead (e.g., 'Increase the visual disparity...', 'Amplify rim lighting...', 'Boost visibility...').
+    4. **NARRATIVE FOCUS:** Analyze the emotional and visual contrast between the main subjects. Suggestions MUST address how to optimize the psychological tension.
+    5. **DATA FOCUS:** If any Key Object Contrast Score is below 0.85, the first suggestion MUST be a technical fix to raise the contrast of that specific element.
+    6. Use specific, quantifiable techniques (e.g., 'Isolate the subject with a 2-stop exposure drop in the background')."""
 
     image_part = types.Part.from_bytes(data=image_bytes, mime_type='image/jpeg')
 
     # Get the CROPPED image bytes (for text focus)
-    cropped_text_bytes = analysis_data.pop('cropped_image_bytes', b'')
+    cropped_text_bytes = analysis_data.get('cropped_image_bytes', b'')
     cropped_text_part = types.Part.from_bytes(data=cropped_text_bytes, mime_type='image/jpeg') if cropped_text_bytes else image_part
     
-# In backend/app/core/llm_generator.py, within the generate_final_feedback function
-
-    # 1. Build the Quantitative Data Payload (metrics_json)
+    # ----------------------------------------------------------------
+    # USER PROMPT: Dynamic Input Payload
+    # ----------------------------------------------------------------
     metrics_json = json.dumps({
-        # Core Visual Metrics
         "average_brightness": round(analysis_data.get('average_brightness', 0), 2),
         "contrast_level": round(analysis_data.get('contrast_level', 0), 2),
         "dominant_colors": analysis_data.get('dominant_colors', []),
-        
-        # Text Metrics (Provided for Gemini to correct/validate)
         "word_count_ocr_RESULT": analysis_data.get('word_count', 0),
         "text_content_ocr_RESULT": analysis_data.get('text_content', 'None'), 
-        
-        # Emotion/Face Metrics (Derived from Gemini Detection)
         "face_count": analysis_data.get('face_count', 0),
         "dominant_emotion": analysis_data.get('detected_emotion', 'N/A'),
-        
-        # Key Object Contrast Metrics (For data-driven suggestions)
+        "detected_faces": [
+            {
+                "emotion": face.get("emotion", "Unknown"),
+                "position": face.get("position", "unknown"),
+                "contrast_vs_bg": round(face.get("contrast_score_vs_bg", 0.5), 2)
+            }
+            for face in detected_faces
+        ],
         "key_object_contrasts": [
             {
-                "label": obj["label"],
-                # Removed confidence, focusing on the highly actionable contrast score
-                "contrast_vs_bg": round(obj.get("contrast_score_vs_bg", 0), 2)
+                "label": obj.get("label", "Unknown"),
+                "contrast_vs_bg": round(obj.get("contrast_score_vs_bg", 0.5), 2)
             }
-            for obj in analysis_data.get('detected_objects', [])
+            for obj in detected_objects
         ]
     }, indent=2)
 
-
-    # 2. Build the User Prompt (Dynamic and Focused)
     user_prompt = f"""
-    Analyze the composition and visual elements in the image. Use the provided original image and the cropped text image for visual context.
+    Analyze the visual composition in the image. Use the provided original image and the cropped text image for visual context.
 
-    **CRITICAL INSTRUCTION:** The raw OCR result is provided under 'text_content_ocr_RESULT'. **You must visually inspect the original image and the cropped text image to determine the actual, correct text on the thumbnail.** If the OCR result is inaccurate (e.g., 'YING LINQut'), use the corrected, intended text (e.g., 'DYING LIGHT IS PAIN') when formulating suggestions about word count or readability.
+    **CRITICAL INSTRUCTION:** (Self-Correction): Visually determine the actual text and critique its composition/readability based on that corrected text.
 
-    **EMOTIONAL ANALYSIS FOCUS:** The detected emotion is '{analysis_data.get('detected_emotion', 'N/A')}'. Visually confirm this and generate suggestions to increase emotional impact, using more expressive states like 'Smirking', 'Determined', or 'Shocked'.
+    **EMOTIONAL GROUNDING (Dynamic Subjects):**
+    {face_narrative}
 
     QUANTITATIVE DATA:
     {metrics_json}
 
     Based on all inputs, provide your score and 5 specific, non-generic suggestions in the required JSON format.
     """
+    
     # Use clean schema
     response_schema = get_clean_schema_for_gemini(LLMFeedback)
     
     try:
         response = client.models.generate_content(
             model="gemini-2.0-flash-exp",
-            contents=[image_part, user_prompt],
+            contents=[image_part, cropped_text_part, user_prompt],
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
-                temperature=0.7,
+                temperature=0.8,
                 response_mime_type="application/json",
                 response_schema=response_schema
             )
@@ -271,15 +345,24 @@ Consider these industry best practices:
             'ai_suggestions': feedback.ai_suggestions
         }
         
+    except json.JSONDecodeError as e:
+        print(f"❌ Gemini feedback JSON parsing error: {e}")
+        print(f"Raw response: {response.text if 'response' in locals() else 'No response'}")
+        return _get_fallback_feedback()
     except Exception as e:
         print(f"❌ Gemini API error during feedback generation: {e}")
-        return {
-            'attractiveness_score': 45,
-            'ai_suggestions': [
-                "AI feedback generation failed (API error or timeout).",
-                "Ensure your key subject has maximum contrast against the background.",
-                "Simplify text to 3-5 words for better mobile visibility.",
-                "Use high-contrast color combinations (e.g., yellow text on black).",
-                "Crop the main subject to fill at least 70% of the thumbnail area."
-            ]
-        }
+        return _get_fallback_feedback()
+
+
+def _get_fallback_feedback() -> Dict[str, any]:
+    """Returns fallback feedback when Gemini API fails."""
+    return {
+        'attractiveness_score': 45,
+        'ai_suggestions': [
+            "AI feedback generation failed (API error or timeout).",
+            "Ensure your key subject has maximum contrast against the background.",
+            "Simplify text to 3-5 words for better mobile visibility.",
+            "Use high-contrast color combinations (e.g., yellow text on black).",
+            "Crop the main subject to fill at least 70% of the thumbnail area."
+        ]
+    }

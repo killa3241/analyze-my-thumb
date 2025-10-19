@@ -1,147 +1,183 @@
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { Lightbulb, Eye, Zap, Target } from "lucide-react";
-
-interface AnalysisResult {
-  attractivenessScore: number;
-  brightness: number;
-  contrast: number;
-  detectedObjects: Array<{
-    class: string;
-    confidence: number;
-    contrast: number;
-  }>;
-  faceCount: number;
-  dominantEmotion: string;
-  suggestions: string[];
-}
+// src/components/AnalysisDashboard.tsx
+import { useState } from 'react';
+import { Target, Download, Share2, TrendingUp, FileText, Image as ImageIcon } from 'lucide-react';
+import { AnalysisResult } from '@/types/analysis';
+import { MetricsOverview } from './MetricsOverview';
+import { ObjectDetectionGrid } from './ObjectDetectionGrid';
+import { FaceAnalysisCard } from './FaceAnalysisCard';
+import { AISuggestionsPanel } from './AISuggestionsPanel';
+import { getScoreColor, getScoreGrade } from '@/lib/utils';
 
 interface AnalysisDashboardProps {
   result: AnalysisResult;
+  previewUrl: string | null;
+  onObjectSelect: (index: number | null) => void;
+  selectedObject: number | null;
 }
 
-export function AnalysisDashboard({ result }: AnalysisDashboardProps) {
-  const metricsData = [
-    { name: "Brightness", value: Math.round(result.brightness * 100), color: "hsl(var(--accent))" },
-    { name: "Contrast", value: Math.round(result.contrast * 100), color: "hsl(var(--secondary))" },
-  ];
+export const AnalysisDashboard = ({
+  result,
+  previewUrl,
+  onObjectSelect,
+  selectedObject
+}: AnalysisDashboardProps) => {
+  const [exportFormat, setExportFormat] = useState<'json' | 'pdf' | 'image' | null>(null);
 
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return "text-accent";
-    if (score >= 60) return "text-secondary";
-    return "text-destructive";
+  const handleDownloadReport = () => {
+    // Implement download logic
+    console.log('Downloading report...');
   };
 
-  const getScoreGrade = (score: number) => {
-    if (score >= 80) return "Excellent";
-    if (score >= 60) return "Good";
-    if (score >= 40) return "Average";
-    return "Needs Improvement";
+  const handleShare = () => {
+    // Implement share logic
+    if (navigator.share) {
+      navigator.share({
+        title: 'Thumblytics Analysis',
+        text: `My thumbnail scored ${result.attractiveness_score}!`,
+        url: window.location.href
+      });
+    }
+  };
+
+  const handleExport = (format: 'json' | 'pdf' | 'image') => {
+    setExportFormat(format);
+    // Implement export logic based on format
+    setTimeout(() => setExportFormat(null), 2000);
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-6 animate-in fade-in duration-700">
-      {/* Hero Score */}
-      <Card className="bg-gradient-card p-8 border-border shadow-card">
-        <div className="text-center">
-          <div className="inline-flex items-center gap-2 mb-4">
-            <Target className="h-6 w-6 text-primary" />
-            <h2 className="text-2xl font-bold">Attractiveness Score</h2>
-          </div>
-          <div className={`text-7xl font-bold ${getScoreColor(result.attractivenessScore)} mb-2`}>
-            {result.attractivenessScore}
-          </div>
-          <p className="text-xl text-muted-foreground">{getScoreGrade(result.attractivenessScore)}</p>
+    <div className="space-y-6 animate-in fade-in duration-700">
+      {/* Hero Score Section */}
+      <div className="bg-gradient-to-br from-purple-900/50 to-pink-900/50 backdrop-blur-sm border border-purple-500/30 p-8 rounded-2xl shadow-2xl text-center">
+        <div className="flex items-center justify-center gap-2 mb-4">
+          <Target className="h-6 w-6 text-purple-400" />
+          <h2 className="text-2xl font-bold">Attractiveness Score</h2>
         </div>
-      </Card>
-
-      {/* Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Visual Metrics Chart */}
-        <Card className="bg-gradient-card p-6 border-border shadow-card">
-          <div className="flex items-center gap-2 mb-6">
-            <Eye className="h-5 w-5 text-accent" />
-            <h3 className="text-xl font-semibold">Visual Metrics</h3>
-          </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={metricsData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" />
-              <YAxis stroke="hsl(var(--muted-foreground))" />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "0.5rem",
-                }}
-              />
-              <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                {metricsData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-
-        {/* Object Detection */}
-        <Card className="bg-gradient-card p-6 border-border shadow-card">
-          <div className="flex items-center gap-2 mb-4">
-            <Zap className="h-5 w-5 text-secondary" />
-            <h3 className="text-xl font-semibold">Detected Objects</h3>
-          </div>
-          <div className="space-y-3 max-h-48 overflow-y-auto">
-            {result.detectedObjects.map((obj, idx) => (
-              <div key={idx} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Badge variant="outline" className="capitalize">
-                    {obj.class}
-                  </Badge>
-                  <span className="text-sm text-muted-foreground">
-                    {Math.round(obj.confidence * 100)}% confident
-                  </span>
-                </div>
-                <span className="text-sm font-medium">
-                  Contrast: {Math.round(obj.contrast * 100)}%
-                </span>
-              </div>
-            ))}
-            {result.faceCount > 0 && (
-              <div className="flex items-center justify-between p-3 bg-accent/10 rounded-lg border border-accent/20">
-                <div className="flex items-center gap-3">
-                  <Badge className="bg-accent/20 text-accent">Face Detected</Badge>
-                  <span className="text-sm text-muted-foreground capitalize">
-                    {result.dominantEmotion} expression
-                  </span>
-                </div>
-                <span className="text-sm font-medium">{result.faceCount} face(s)</span>
-              </div>
-            )}
-          </div>
-        </Card>
+        
+        <div className={`text-8xl font-bold ${getScoreColor(result.attractiveness_score)} mb-2 animate-pulse`}>
+          {result.attractiveness_score}
+        </div>
+        
+        <p className="text-2xl text-gray-300 mb-4">
+          {getScoreGrade(result.attractiveness_score)}
+        </p>
+        
+        <div className="flex items-center justify-center gap-4 mt-6 flex-wrap">
+          <button
+            onClick={handleDownloadReport}
+            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded-lg font-medium transition-colors"
+          >
+            <Download className="h-4 w-4" />
+            Download Report
+          </button>
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-2 bg-pink-600 hover:bg-pink-700 px-6 py-3 rounded-lg font-medium transition-colors"
+          >
+            <Share2 className="h-4 w-4" />
+            Share Results
+          </button>
+        </div>
       </div>
 
+      {/* Metrics Overview */}
+      <MetricsOverview
+        averageBrightness={result.average_brightness}
+        contrastLevel={result.contrast_level}
+        wordCount={result.word_count}
+        textContent={result.text_content}
+        dominantColors={result.dominant_colors}
+      />
+
+      {/* Object Detection */}
+      <ObjectDetectionGrid
+        objects={result.detected_objects}
+        selectedObject={selectedObject}
+        onObjectSelect={onObjectSelect}
+      />
+
+      {/* Face Analysis */}
+      {result.face_count > 0 && (
+        <FaceAnalysisCard
+          faceCount={result.face_count}
+          detectedEmotion={result.detected_emotion}
+        />
+      )}
+
       {/* AI Suggestions */}
-      <Card className="bg-gradient-card p-6 border-border shadow-card">
+      <AISuggestionsPanel suggestions={result.ai_suggestions} />
+
+      {/* CTR Prediction */}
+      <div className="bg-gradient-to-br from-blue-900/30 to-purple-900/30 backdrop-blur-sm border border-blue-500/30 p-6 rounded-2xl shadow-xl">
         <div className="flex items-center gap-2 mb-4">
-          <Lightbulb className="h-5 w-5 text-primary" />
-          <h3 className="text-xl font-semibold">AI-Generated Suggestions</h3>
+          <TrendingUp className="h-5 w-5 text-blue-400" />
+          <h3 className="text-xl font-semibold">Predicted CTR Range</h3>
         </div>
-        <div className="space-y-3">
-          {result.suggestions.map((suggestion, idx) => (
-            <div
-              key={idx}
-              className="flex gap-3 p-4 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
-            >
-              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gradient-primary flex items-center justify-center text-sm font-bold">
-                {idx + 1}
-              </div>
-              <p className="text-foreground leading-relaxed">{suggestion}</p>
-            </div>
-          ))}
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="text-center">
+            <p className="text-sm text-gray-400 mb-2">Conservative</p>
+            <p className="text-4xl font-bold text-red-400">
+              {(result.attractiveness_score * 0.05).toFixed(1)}%
+            </p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm text-gray-400 mb-2">Expected</p>
+            <p className="text-5xl font-bold text-yellow-400">
+              {(result.attractiveness_score * 0.08).toFixed(1)}%
+            </p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm text-gray-400 mb-2">Optimistic</p>
+            <p className="text-4xl font-bold text-green-400">
+              {(result.attractiveness_score * 0.12).toFixed(1)}%
+            </p>
+          </div>
         </div>
-      </Card>
+        
+        <div className="mt-6 bg-gray-900/50 rounded-lg p-4">
+          <p className="text-sm text-gray-400">
+            📊 Based on your score of{' '}
+            <span className="text-purple-400 font-bold">{result.attractiveness_score}</span>, 
+            this thumbnail is predicted to achieve a CTR between{' '}
+            <span className="text-yellow-400 font-bold">
+              {(result.attractiveness_score * 0.05).toFixed(1)}%
+            </span>
+            {' '}and{' '}
+            <span className="text-green-400 font-bold">
+              {(result.attractiveness_score * 0.12).toFixed(1)}%
+            </span>
+          </p>
+        </div>
+      </div>
+
+      {/* Export Options */}
+      <div className="flex flex-wrap gap-4 justify-center">
+        <button
+          onClick={() => handleExport('json')}
+          disabled={exportFormat === 'json'}
+          className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 px-6 py-3 rounded-lg font-medium transition-all hover:scale-105 disabled:opacity-50"
+        >
+          <FileText className="h-4 w-4" />
+          {exportFormat === 'json' ? 'Exporting...' : 'Export as JSON'}
+        </button>
+        <button
+          onClick={() => handleExport('pdf')}
+          disabled={exportFormat === 'pdf'}
+          className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 px-6 py-3 rounded-lg font-medium transition-all hover:scale-105 disabled:opacity-50"
+        >
+          <Download className="h-4 w-4" />
+          {exportFormat === 'pdf' ? 'Exporting...' : 'Download PDF Report'}
+        </button>
+        <button
+          onClick={() => handleExport('image')}
+          disabled={exportFormat === 'image'}
+          className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 px-6 py-3 rounded-lg font-medium transition-all hover:scale-105 disabled:opacity-50"
+        >
+          <ImageIcon className="h-4 w-4" />
+          {exportFormat === 'image' ? 'Exporting...' : 'Download Annotated'}
+        </button>
+      </div>
     </div>
   );
-}
+};

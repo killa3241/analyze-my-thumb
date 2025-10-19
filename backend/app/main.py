@@ -10,7 +10,7 @@ from typing import Optional
 import os
 import traceback
 
-from app.models.analysis_models import AnalysisResult, GeminiTextDetection, GeminiAllDetection
+from app.models.analysis_models import AnalysisResult, GeminiAllDetection
 from app.core.image_processor import (
     extract_youtube_thumbnail_url,
     fetch_image_bytes,
@@ -18,7 +18,6 @@ from app.core.image_processor import (
 )
 from app.core.llm_generator import (
     generate_final_feedback,
-    get_text_bounds_from_gemini,
     get_all_detection_data
 )
 
@@ -68,13 +67,7 @@ async def analyze_thumbnail(
     youtube_url: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None)
 ):
-    """
-    Analyze a YouTube thumbnail or uploaded image using Gemini AI.
-    
-    Accepts either:
-    - youtube_url: YouTube video URL (extracts thumbnail)
-    - file: Direct image upload
-    """
+    """Analyze a YouTube thumbnail or uploaded image."""
     
     # Validate input
     if not youtube_url and not file:
@@ -89,10 +82,7 @@ async def analyze_thumbnail(
             print(f"📺 Extracting thumbnail from YouTube URL...")
             thumbnail_url = extract_youtube_thumbnail_url(youtube_url)
             if not thumbnail_url:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid YouTube URL format"
-                )
+                raise HTTPException(status_code=400, detail="Invalid YouTube URL format")
             image_bytes = await fetch_image_bytes(thumbnail_url)
             print(f"✅ Thumbnail fetched: {len(image_bytes)} bytes")
         else:
@@ -100,86 +90,119 @@ async def analyze_thumbnail(
             image_bytes = await file.read()
             print(f"✅ File loaded: {len(image_bytes)} bytes")
         
-        # ===== STEP 1: Get Text Bounds from Gemini =====
-        print("📝 Detecting text bounds with Gemini...")
-        gemini_text_dict = await run_in_threadpool(get_text_bounds_from_gemini, image_bytes)
+        # ===== STEP 1: Gemini Detection (Get ALL detections) =====
+        print("🤖 Running Gemini detection for all elements (faces, objects, text)...")
+        
+        gemini_detection_dict = await run_in_threadpool(get_all_detection_data, image_bytes)
         
         try:
-            gemini_text_bounds = GeminiTextDetection(**gemini_text_dict)
-            detected_blocks = len(gemini_text_bounds.detected_text_blocks)
-            print(f"✅ Gemini detected {detected_blocks} text block(s)")
-        except Exception as e:
-            print(f"⚠️ Text bounds validation issue: {e}")
-            gemini_text_bounds = GeminiTextDetection(detected_text_blocks=[])
-        
-        # ===== STEP 2: Run CV Analysis (Brightness, Contrast, Colors, OCR) =====
-        print("🔍 Running CV analysis (brightness, contrast, colors)...")
-        cv_analysis_data = await run_in_threadpool(
-            run_full_analysis,
-            image_bytes,
-            gemini_text_bounds.model_dump()
-        )
-        print("✅ CV analysis complete")
-        
-        # ===== STEP 3: Get Object & Emotion Detection from Gemini =====
-        print("🤖 Detecting objects, faces, and emotions with Gemini...")
-        detection_dict = await run_in_threadpool(get_all_detection_data, image_bytes)
-        
-        try:
-            detection_data = GeminiAllDetection(**detection_dict)
-            print(f"✅ Detected {len(detection_data.detected_objects)} objects, "
-                  f"{detection_data.face_count} face(s), "
-                  f"emotion: {detection_data.detected_emotion or 'None'}")
+            # Validate the detection result
+            detection_data = GeminiAllDetection(**gemini_detection_dict)
+            detected_elements = detection_data.detected_objects
+            
+            print(f"✅ Gemini detected {len(detected_elements)} total elements")
+            
         except Exception as e:
             print(f"⚠️ Detection validation issue: {e}")
             traceback.print_exc()
-            detection_data = GeminiAllDetection(
-                detected_objects=[],
-                face_count=0,
-                detected_emotion=None
-            )
+            # Fallback to empty data on validation failure
+            detected_elements = []
         
-        # ===== STEP 4: Merge CV + Detection Data =====
-        analysis_data = {
-            **cv_analysis_data,
-            'detected_objects': [obj.model_dump() for obj in detection_data.detected_objects],
-            'face_count': detection_data.face_count,
-            'detected_emotion': detection_data.detected_emotion
-        }
+        # Convert Pydantic models to dicts for processing
+        gemini_detections_list = [elem.model_dump() for elem in detected_elements]
         
-        # ===== STEP 5: Generate Final LLM Feedback =====
+        print(f"📦 Passing {len(gemini_detections_list)} detections to run_full_analysis:")
+        for det in gemini_detections_list[:5]:  # Show first 5
+            print(f"   - {det.get('label', 'unknown')} (confidence: {det.get('confidence', 0):.2f})")
+        if len(gemini_detections_list) > 5:
+            print(f"   ... and {len(gemini_detections_list) - 5} more")
+        
+        # ===== STEP 2: Run Full CV Analysis + Processing =====
+        # This function now handles EVERYTHING internally:
+        # - CV metrics (brightness, contrast, colors)
+        # - Text extraction (OCR)
+        # - Face processing (count, emotion, contrast, position)
+        # - Object processing (contrast calculation)
+        # - Returns comprehensive analysis_data with ALL necessary fields
+        print("🔍 Running comprehensive analysis (CV + Detection Processing)...")
+        
+        analysis_data = await run_in_threadpool(
+            run_full_analysis,
+            image_bytes,
+            gemini_detections_list  # Pass the full list from Gemini
+        )
+        
+        print("✅ Analysis complete!")
+        print(f"   📊 Results:")
+        print(f"      - Brightness: {analysis_data['average_brightness']:.2f}")
+        print(f"      - Contrast: {analysis_data['contrast_level']:.2f}")
+        print(f"      - Text: '{analysis_data['text_content']}'")
+        print(f"      - Faces: {analysis_data['face_count']} (emotion: {analysis_data.get('detected_emotion', 'N/A')})")
+        print(f"      - Objects: {len(analysis_data['detected_objects'])}")
+        
+        # Log detected objects for debugging
+        if analysis_data['detected_objects']:
+            print(f"   🎯 Detected Objects:")
+            for obj in analysis_data['detected_objects']:
+                print(f"      - {obj.get('label', 'unknown')} (contrast: {obj.get('contrast_score_vs_bg', 0):.3f})")
+        else:
+            print(f"   ⚠️ No objects detected")
+        
+        # ===== STEP 3: Generate AI Feedback =====
         print("💡 Generating AI suggestions...")
+        
         llm_result = await run_in_threadpool(generate_final_feedback, image_bytes, analysis_data)
+        
         print(f"✅ AI feedback generated (Score: {llm_result['attractiveness_score']}/100)")
         
-        # ===== STEP 6: Combine & Return Final Result =====
+        # ===== STEP 4: Construct Final Result =====
+        # Now we simply use the comprehensive analysis_data directly
+        # NO need to derive face_count/detected_emotion here - image_processor already did it!
         final_result = AnalysisResult(
+            # CV Metrics
             average_brightness=analysis_data['average_brightness'],
             contrast_level=analysis_data['contrast_level'],
             dominant_colors=analysis_data['dominant_colors'],
+            
+            # Text Analysis
             word_count=analysis_data['word_count'],
             text_content=analysis_data['text_content'],
+            
+            # Face Data (now comes directly from run_full_analysis)
             face_count=analysis_data['face_count'],
             detected_emotion=analysis_data['detected_emotion'],
-            detected_objects=detection_data.detected_objects,
+            detected_faces=analysis_data['detected_faces'],
+            
+            # Object Data (now properly populated from run_full_analysis)
+            detected_objects=analysis_data['detected_objects'],
+            
+            # AI Feedback
             attractiveness_score=llm_result['attractiveness_score'],
             ai_suggestions=llm_result['ai_suggestions']
         )
         
         print(f"🎉 Analysis complete! Score: {final_result.attractiveness_score}/100")
+        print(f"   📊 Final counts: {final_result.face_count} faces, {len(final_result.detected_objects)} objects")
+        
+        if final_result.detected_objects:
+            print(f"   🔍 Objects being returned to frontend:")
+            for obj in final_result.detected_objects:
+                print(f"      - {obj.label} (confidence: {obj.confidence:.2f}, contrast: {obj.contrast_score_vs_bg:.3f})")
+        else:
+            print(f"   ⚠️ WARNING: No objects in final result!")
+        
         return final_result
         
     except HTTPException:
         raise
     except Exception as e:
-        if "GEMINI_API_KEY" in str(e):
-            print(f"❌ API Key Error: {e}")
+        if "GEMINI_API_KEY" in str(e) or "authentication" in str(e).lower():
             raise HTTPException(
                 status_code=500,
-                detail="GEMINI_API_KEY environment variable is not configured correctly."
+                detail="GEMINI_API_KEY environment variable is not configured correctly or is invalid."
             )
         
-        print(f"❌ Analysis error: {e}")
+        print(f"❌ Critical Analysis Error: {e}")
         traceback.print_exc()
         raise HTTPException(
             status_code=500,
