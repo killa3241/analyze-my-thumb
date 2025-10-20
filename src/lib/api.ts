@@ -3,7 +3,7 @@
 import { AnalysisResult } from '@/types/analysis'; // We'll define this type next
 
 // ⚠️ CHANGE THIS TO YOUR FASTAPI BACKEND URL ⚠️
-const API_BASE_URL = import.meta.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 /**
  * Fetches the analysis result from the FastAPI backend.
  * Handles both URL submission and file upload.

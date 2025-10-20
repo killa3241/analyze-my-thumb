@@ -35,10 +35,8 @@ app.add_middleware(
         "http://localhost:5173",      # Local development
         "http://localhost:8080",      # Local development
         "http://localhost:3000",      # Local development
-        "https://thumblytics-pro.vercel.app",  # Old Vercel URL (if needed)
-        "https://*.vercel.app",       # All Vercel preview deployments
-        "https://*.netlify.app",      # All Netlify deployments
-        "https://*.netlify.com",      # Netlify custom domains
+        "https://thumbnail-analyzer.netlify.app",  # Old Vercel URL (if needed)
+        "https://*.netlify.app",        # All Vercel preview deployments
     ],
     allow_credentials=True,
     allow_methods=["*"],
