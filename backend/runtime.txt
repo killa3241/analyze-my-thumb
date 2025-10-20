@@ -1,18 +1,1 @@
-cd backend
-git add runtime.txt
-git commit -m "Lock Python version to 3.12.4"
-git push
-```
-
-**Step 2: Clear Build Cache in Render Dashboard** ← This is the critical step!
-
-1. Go to your **Render Dashboard**
-2. Click on your service: **`thumblytics-api`**
-3. Look for the **"Manual Deploy"** button (top right corner)
-4. Click the dropdown arrow next to it
-5. Select **"Clear build cache & deploy"**
-6. Wait for the deployment to complete and **check the build logs**
-
-The logs should now show:
-```
-Installing Python 3.12.4
+python-3.12.7
