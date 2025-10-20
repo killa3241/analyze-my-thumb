@@ -1,0 +1,27 @@
+# Navigate to backend folder
+cd backend
+
+# Create runtime.txt
+echo "python-3.12.4" > runtime.txt
+
+# Verify it was created
+cat runtime.txt
+```
+
+**Output should show:**
+```
+python-3.12.4
+```
+
+---
+
+## 📋 **Step 2: Verify Your Backend Structure**
+
+Your backend folder should now have:
+```
+backend/
+├── app/
+│   ├── main.py
+│   └── __init__.py
+├── requirements.txt
+└── runtime.txt          ← NEW FILE
