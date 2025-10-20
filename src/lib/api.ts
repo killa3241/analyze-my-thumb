@@ -3,7 +3,7 @@
 import { AnalysisResult } from '@/types/analysis'; // We'll define this type next
 
 // ⚠️ CHANGE THIS TO YOUR FASTAPI BACKEND URL ⚠️
-const API_BASE_URL = 'http://localhost:8000'; 
+const API_BASE_URL = process.env.REACT_APP_API_URL ||'http://localhost:8000'; 
 
 /**
  * Fetches the analysis result from the FastAPI backend.

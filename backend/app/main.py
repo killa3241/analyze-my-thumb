@@ -32,10 +32,13 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:8080",
-        "https://thumblytics-pro.vercel.app",  # We'll update this after frontend deploy
-        "https://*.vercel.app",  # Allows all Vercel preview deployments
+        "http://localhost:5173",      # Local development
+        "http://localhost:8080",      # Local development
+        "http://localhost:3000",      # Local development
+        "https://thumblytics-pro.vercel.app",  # Old Vercel URL (if needed)
+        "https://*.vercel.app",       # All Vercel preview deployments
+        "https://*.netlify.app",      # All Netlify deployments
+        "https://*.netlify.com",      # Netlify custom domains
     ],
     allow_credentials=True,
     allow_methods=["*"],
