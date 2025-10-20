@@ -1,0 +1,2 @@
+cd backend
+echo "3.12.7" > .python-version
