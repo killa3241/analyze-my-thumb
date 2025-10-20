@@ -31,7 +31,12 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:8080",
+        "https://thumblytics-pro.vercel.app",  # We'll update this after frontend deploy
+        "https://*.vercel.app",  # Allows all Vercel preview deployments
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -6,6 +6,9 @@ venv/
 .venv/
 env/
 .env/
+ENV/
+env.bak/
+venv.bak/
 
 # ------------------------------------
 # 2. ENVIRONMENT VARIABLES & SECRETS
@@ -14,6 +17,7 @@ env/
 .env
 .env.*
 !.env.example # OPTIONAL: Un-ignore if you have a template file
+*.env
 
 # ------------------------------------
 # 3. PYTHON CACHE/BUILD FILES
@@ -21,11 +25,26 @@ env/
 # Ignore compiled Python files
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
 
 # Ignore testing/coverage directories
 .pytest_cache/
 htmlcov/
 .coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
 
 # ------------------------------------
 # 4. OPERATING SYSTEM & IDE FILES
@@ -33,12 +52,64 @@ htmlcov/
 # Windows
 Thumbs.db
 Desktop.ini
+ehthumbs.db
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+*~
 
 # VS Code
 .vscode/
+*.code-workspace
+
+# PyCharm / IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
 
 # Jupyter/IPython Notebooks
 .ipynb_checkpoints
+*.ipynb
 
-# Uvicorn/FastAPI specific cache
+# ------------------------------------
+# 5. LOGS & DATABASES
+# ------------------------------------
+*.log
+*.sqlite
+*.sqlite3
+*.db
+*.sql
+
+# ------------------------------------
+# 6. FASTAPI/UVICORN SPECIFIC
+# ------------------------------------
 .mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# ------------------------------------
+# 7. UPLOADED FILES (if you store them)
+# ------------------------------------
+# Ignore user-uploaded thumbnails during development
+uploads/
+temp/
+tmp/
+*.tmp
+
+# ------------------------------------
+# 8. RENDER/DEPLOYMENT SPECIFIC
+# ------------------------------------
+# Keep these to avoid committing deployment artifacts
+.render/
