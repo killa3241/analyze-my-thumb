@@ -1,8 +1,7 @@
 // src/hooks/useCompareThumbnails.ts
 import { useState, useEffect } from 'react';
 import { ThumbnailState, ComparisonResult, AnalysisResult, calculateComparison } from '../types/comparison';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { API_BASE_URL } from '@/lib/api';
 
 interface AnalyzeInput {
   type: 'url' | 'file';
