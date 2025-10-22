@@ -109,15 +109,20 @@ export const ObjectDetectionGrid = ({
                   </div>
                 )}
 
-                {/* ✅ FIX: Position Info with null check */}
-                {obj.bbox && obj.bbox.length >= 2 && (
+                {/* Position Info - FIXED to use bbox_normalized */}
+                {obj.bbox_normalized && obj.bbox_normalized.length >= 2 && (
                   <div className="mt-3 pt-3 border-t border-gray-700">
                     <div className="flex items-center justify-between text-xs text-gray-500">
                       <span>Position:</span>
                       <span className="font-mono">
-                        {Math.round(obj.bbox[0])}, {Math.round(obj.bbox[1])}
+                        {Math.round(obj.bbox_normalized[0])}, {Math.round(obj.bbox_normalized[1])}
                       </span>
                     </div>
+                    {obj.position && (
+                      <div className="mt-1 text-xs text-gray-500">
+                        <span className="text-purple-400 font-medium">{obj.position}</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

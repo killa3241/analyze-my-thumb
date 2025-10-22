@@ -9,7 +9,7 @@ interface ThumbnailInputProps {
   previewUrl: string | null;
   onPreviewChange: (url: string | null) => void;
   selectedObject: number | null;
-  detectedObjects?: Array<{ bbox: number[] }>;
+  detectedObjects?: Array<{ bbox_normalized: number[] }>; // ✅ FIXED: Changed from bbox to bbox_normalized
 }
 
 export const ThumbnailInput = ({
@@ -221,15 +221,15 @@ export const ThumbnailInput = ({
               alt="Thumbnail preview"
               className="w-full h-auto transition-transform duration-300 group-hover:scale-105"
             />
-            {/* Object Detection Overlay */}
+            {/* Object Detection Overlay - FIXED to use bbox_normalized */}
             {selectedObject !== null && detectedObjects[selectedObject] && (
               <div
                 className="absolute border-4 border-purple-500 pointer-events-none animate-pulse"
                 style={{
-                  left: `${detectedObjects[selectedObject].bbox[0] / 12.8}%`,
-                  top: `${detectedObjects[selectedObject].bbox[1] / 7.2}%`,
-                  width: `${(detectedObjects[selectedObject].bbox[2] - detectedObjects[selectedObject].bbox[0]) / 12.8}%`,
-                  height: `${(detectedObjects[selectedObject].bbox[3] - detectedObjects[selectedObject].bbox[1]) / 7.2}%`,
+                  left: `${detectedObjects[selectedObject].bbox_normalized[0] / 12.8}%`,
+                  top: `${detectedObjects[selectedObject].bbox_normalized[1] / 7.2}%`,
+                  width: `${(detectedObjects[selectedObject].bbox_normalized[2] - detectedObjects[selectedObject].bbox_normalized[0]) / 12.8}%`,
+                  height: `${(detectedObjects[selectedObject].bbox_normalized[3] - detectedObjects[selectedObject].bbox_normalized[1]) / 7.2}%`,
                 }}
               />
             )}

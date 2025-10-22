@@ -1,4 +1,4 @@
-// src/components/MetricsOverview.tsx
+// src/components/MetricsOverview.tsx - Fixed OCR Display
 
 import { Sun, Zap, Type, Palette } from 'lucide-react';
 import { CircularProgress } from './CircularProgress';
@@ -20,6 +20,21 @@ export const MetricsOverview = ({
   dominantColors,
 }: MetricsOverviewProps) => {
   const brightnessPercentage = normalizeMetricValue(averageBrightness, 255);
+  
+  // ✅ FIXED: Robust OCR display logic
+  const normalizedText = textContent?.trim() || 'None';
+  const isOcrFailed = 
+    normalizedText === 'None' || 
+    normalizedText === 'OCR Failed' ||
+    normalizedText.includes('Failed') ||
+    normalizedText.length === 0;
+  
+  const displayContent = isOcrFailed 
+    ? 'No text detected' 
+    : normalizedText.replace(/\r?\n/g, ' ');
+  
+  // ✅ FIXED: Use 0 if OCR failed
+  const actualWordCount = isOcrFailed ? 0 : wordCount;
 
   return (
     <div className="space-y-6">
@@ -79,7 +94,7 @@ export const MetricsOverview = ({
           </p>
         </div>
 
-        {/* Text Count */}
+        {/* Text Count (Words) - FIXED */}
         <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 p-6 rounded-2xl shadow-xl hover:shadow-2xl transition-all hover:scale-105 hover:border-green-500/30">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -88,26 +103,47 @@ export const MetricsOverview = ({
               </div>
               <h3 className="font-semibold text-white">Words</h3>
             </div>
-            <div className="text-4xl font-bold text-green-400">{wordCount}</div>
+            <div className="text-4xl font-bold text-green-400">
+              {actualWordCount}
+            </div>
           </div>
-          <p className="text-sm text-gray-300 truncate mb-1 h-5">
-            {textContent || 'No text detected'}
+
+          {/* Content Preview */}
+          <p 
+            className={`text-sm truncate mb-3 h-5 ${
+              isOcrFailed ? 'text-gray-500 italic' : 'text-gray-300'
+            }`}
+            title={displayContent}
+          >
+            {displayContent}
           </p>
-          <div className="flex items-center gap-2">
+
+          {/* Progress Bar */}
+          <div className="flex items-center gap-2 mb-2">
             <div className="flex-1 bg-gray-700 rounded-full h-2 overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-green-600 to-green-400 transition-all duration-1000"
-                style={{ width: `${Math.min(100, (wordCount / 7) * 100)}%` }}
+                style={{ width: `${Math.min(100, (actualWordCount / 7) * 100)}%` }}
               />
             </div>
           </div>
-          <p className="text-xs text-gray-400 mt-2">
-            Optimal: 3-7 words • {wordCount >= 3 && wordCount <= 7 ? '✓ Perfect' : wordCount < 3 ? '⚠ Too few' : '⚠ Too many'}
+
+          {/* Optimal Range Indicator */}
+          <p className="text-xs text-gray-400">
+            Optimal: 3-7 words • {
+              actualWordCount === 0 
+                ? '— No text' 
+                : actualWordCount >= 3 && actualWordCount <= 7 
+                  ? '✓ Perfect' 
+                  : actualWordCount < 3 
+                    ? '⚠ Too few' 
+                    : '⚠ Too many'
+            }
           </p>
         </div>
       </div>
 
-      {/* Dominant Colors */}
+      {/* Dominant Colors - Full Width Section */}
       <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 p-6 rounded-2xl shadow-xl">
         <div className="flex items-center gap-3 mb-6">
           <div className="p-2 bg-pink-500/10 rounded-lg">

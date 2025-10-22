@@ -1,9 +1,9 @@
 // src/lib/api.ts
 
-import { AnalysisResult } from '@/types/analysis'; // We'll define this type next
+import { AnalysisResult } from '@/types/analysis';
 
-// ⚠️ CHANGE THIS TO YOUR FASTAPI BACKEND URL ⚠️
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 /**
  * Fetches the analysis result from the FastAPI backend.
  * Handles both URL submission and file upload.
@@ -15,16 +15,15 @@ export async function fetchAnalysis(
   const formData = new FormData();
 
   if ('youtubeUrl' in input) {
-    // 1. YouTube URL submission (sends as Form field)
     formData.append('youtube_url', input.youtubeUrl);
   } else {
-    // 2. File upload submission (sends as File field)
     formData.append('file', input.file);
   }
 
+  console.log('🚀 Sending request to:', endpoint);
+
   const response = await fetch(endpoint, {
     method: 'POST',
-    // Do NOT set Content-Type header; FormData handles it automatically for multipart/form-data
     body: formData,
   });
 
@@ -34,11 +33,27 @@ export async function fetchAnalysis(
       const errorJson = await response.json();
       errorDetail = errorJson.detail || errorDetail;
     } catch {
-      // If response is not JSON
       errorDetail = `Server error: ${response.statusText}`;
     }
     throw new Error(errorDetail);
   }
 
-  return response.json() as Promise<AnalysisResult>;
+  // ✅ CRITICAL DEBUG: Log raw response before parsing
+  const rawText = await response.text();
+  console.log('📦 Raw API Response (first 500 chars):', rawText.substring(0, 500));
+
+  // Parse the response
+  const jsonData = JSON.parse(rawText);
+  
+  // ✅ CRITICAL DEBUG: Log the parsed JSON
+  console.log('📊 Parsed JSON - text_content:', jsonData.text_content);
+  console.log('📊 Parsed JSON - word_count:', jsonData.word_count);
+  console.log('📊 Full parsed object keys:', Object.keys(jsonData));
+
+  // ✅ CRITICAL DEBUG: Check if the data is being lost during type casting
+  const result = jsonData as AnalysisResult;
+  console.log('🔄 After type cast - text_content:', result.text_content);
+  console.log('🔄 After type cast - word_count:', result.word_count);
+
+  return result;
 }

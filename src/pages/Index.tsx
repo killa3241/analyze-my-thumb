@@ -1,5 +1,6 @@
 // src/pages/Index.tsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { Eye, BarChart3, Moon, Sun, History, Share2 } from 'lucide-react';
 import { ThumbnailInput } from '@/components/ThumbnailInput';
 import { AnalysisDashboard } from '@/components/AnalysisDashboard';
@@ -8,13 +9,17 @@ import { LoadingSkeleton } from '@/components/LoadingSkeleton';
 import { useAnalyzeThumbnail } from '@/hooks/useAnalyzeThumbnail';
 import { useHistory } from '@/hooks/useHistory';
 
-export default function Index() {
+export function Index() {
+  const location = useLocation()
   const [darkMode, setDarkMode] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedObject, setSelectedObject] = useState<number | null>(null);
+  
+  // Toast state with fade control
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [isToastFadingOut, setIsToastFadingOut] = useState(false);
 
-  // ✅ FIX #1: Changed deleteFromHistory → removeFromHistory (matches hook export)
   const { history, addToHistory, removeFromHistory, clearHistory } = useHistory();
   const { analyzeThumbnail, result, isAnalyzing, error, progress } = useAnalyzeThumbnail();
 
@@ -38,6 +43,38 @@ export default function Index() {
       console.error('Analysis failed:', err);
     }
   };
+  
+  // Toast animation with fade in/out
+  useEffect(() => {
+    let fadeOutTimer: NodeJS.Timeout | undefined;
+    let hideTimer: NodeJS.Timeout | undefined;
+
+    if (result && !isAnalyzing && !error) {
+      // Reset fade state and show toast
+      setIsToastFadingOut(false);
+      setShowSuccessToast(true);
+      
+      // Start fade out after 1.5 seconds (2s total - 0.5s fade duration)
+      fadeOutTimer = setTimeout(() => {
+        setIsToastFadingOut(true);
+      }, 1500);
+      
+      // Completely hide toast after 2 seconds
+      hideTimer = setTimeout(() => {
+        setShowSuccessToast(false);
+        setIsToastFadingOut(false);
+      }, 2000);
+    } else if (isAnalyzing || error) {
+      // Hide immediately when new analysis starts or error occurs
+      setShowSuccessToast(false);
+      setIsToastFadingOut(false);
+    }
+
+    return () => {
+      if (fadeOutTimer) clearTimeout(fadeOutTimer);
+      if (hideTimer) clearTimeout(hideTimer);
+    };
+  }, [result, isAnalyzing, error]);
 
   const handleHistoryItemClick = (item: typeof history[0]) => {
     setPreviewUrl(item.thumbnail);
@@ -63,7 +100,7 @@ export default function Index() {
       </div>
 
       {/* Header */}
-      <header className="relative border-b border-gray-800/50 backdrop-blur-xl bg-gray-900/80 sticky top-0 z-40">
+      <header className="relative border-b border-gray-800/50 backdrop-blur-xl bg-gray-900/80 top-0 z-40">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             {/* Logo */}
@@ -79,12 +116,21 @@ export default function Index() {
 
             {/* Navigation */}
             <nav className="hidden md:flex items-center gap-6">
-              <button className="text-sm font-medium border-b-2 border-purple-500 pb-1">
+              <Link to="/" className={`text-sm font-medium pb-1 ${
+                  location.pathname === '/' ? 'border-b-2 border-purple-500 text-white' : 'text-gray-400 hover:text-white'
+                }`}
+              >
                 Analyze
-              </button>
-              <button className="text-sm font-medium text-gray-400 hover:text-white transition-colors">
+              </Link>
+              <Link
+                to="/compare"
+                className={`text-sm font-medium pb-1 ${
+                  location.pathname === '/compare' ? 'border-b-2 border-purple-500 text-white' : 'text-gray-400 hover:text-white'
+                }`}
+              >
                 Compare
-              </button>
+              </Link>
+
               <button
                 onClick={() => setShowHistory(!showHistory)}
                 className="text-sm font-medium text-gray-400 hover:text-white transition-colors flex items-center gap-1"
@@ -132,7 +178,6 @@ export default function Index() {
       </header>
 
       {/* History Sidebar */}
-      {/* ✅ FIX #2: Changed prop names to match HistorySidebar interface */}
       <HistorySidebar
         isOpen={showHistory}
         onClose={() => setShowHistory(false)}
@@ -231,16 +276,40 @@ export default function Index() {
         </div>
       </footer>
 
-      {/* ✅ FIX #3: Removed duplicate error toast (already shown in main content) */}
-      {/* Success Toast */}
-      {result && !isAnalyzing && !error && (
-        <div className="fixed bottom-4 right-4 bg-green-500 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-4 z-50">
+      {/* Success Toast with Fade In/Out Animation */}
+      {showSuccessToast && (
+        <div 
+          className={`fixed bottom-4 right-4 bg-green-500 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 z-50 transition-all duration-500 ${
+            isToastFadingOut 
+              ? 'opacity-0 translate-y-2' 
+              : 'opacity-100 translate-y-0'
+          }`}
+          style={{
+            animation: isToastFadingOut 
+              ? 'none' 
+              : 'fadeInSlideUp 0.5s ease-out'
+          }}
+        >
           <div className="flex items-center gap-3">
             <span className="text-2xl">✅</span>
             <p className="font-medium">Analysis Complete!</p>
           </div>
         </div>
       )}
+
+      {/* CSS Animation (add to your global styles or inline style tag) */}
+      <style>{`
+        @keyframes fadeInSlideUp {
+          from {
+            opacity: 0;
+            transform: translateY(0.5rem);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }
