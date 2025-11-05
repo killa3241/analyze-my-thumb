@@ -1,4 +1,4 @@
-# backend/app/core/llm_generator.py
+# backend/app/core/llm_generator.py - IMPROVED VERSION
 
 import json
 import os
@@ -70,64 +70,110 @@ def get_clean_schema_for_gemini(pydantic_model):
 
 
 # ----------------------------------------------------------------------
-# 1. COMPREHENSIVE DETECTION FUNCTION (Phase 1)
+# 1. COMPREHENSIVE DETECTION FUNCTION (Phase 1) - IMPROVED
 # ----------------------------------------------------------------------
 
-DETECTION_SYSTEM_INSTRUCTION = (
-    "You are a hyper-accurate Computer Vision analysis tool specializing in YouTube thumbnail analysis. "
-    "Your PRIMARY task is to identify and precisely locate ALL critical visual elements.\n\n"
-    
-    "**MANDATORY DETECTION CATEGORIES:**\n"
-    "1. **FACES** - Detect ALL human faces/persons with high precision\n"
-    "   - For EACH face, you MUST infer the dominant emotion\n"
-    "   - Emotion labels: 'Shocked', 'Excited', 'Determined', 'Smirking', 'Angry', 'Fear', 'Happy', 'Sad', 'Surprised', 'Neutral'\n"
-    "   - Label as 'face' or 'person'\n"
-    "   - Include partial faces if visible\n\n"
-    
-    "2. **TEXT OVERLAYS** - All text regions (titles, captions, labels)\n"
-    "   - Label as 'text_overlay' or include descriptive text label\n\n"
-    
-    "3. **MAIN OBJECTS** - Key visual elements that are CRITICAL to detect:\n"
-    "   - **Animals** (elephant, lion, tiger, dog, cat, bird, dinosaur, fish, snake, etc.)\n"
-    "   - **Logos and brands** (YouTube logo, OpenAI logo, company logos, brand marks)\n"
-    "   - **Products and items** (phones, cameras, laptops, tools, weapons, gadgets, equipment)\n"
-    "   - **Vehicles** (cars, planes, bikes, ships, trucks, motorcycles)\n"
-    "   - **Natural elements** (fire, flames, water, mountains, trees, clouds, lightning)\n"
-    "   - **Characters and creatures** (zombies, robots, monsters, aliens, superheroes)\n"
-    "   - **Sports equipment** (soccer ball, basketball, baseball bat, tennis racket)\n"
-    "   - **Visual effects and props** (arrows, circles, highlights, explosions, sparkles)\n"
-    "   - **Food items** (pizza, burger, cake, etc.)\n"
-    "   - Use descriptive, specific labels (e.g., 'elephant', 'baseball bat', 'fire effect', 'zombie character')\n\n"
-    
-    "**CRITICAL REQUIREMENTS:**\n"
-    "- ALL bounding boxes MUST be normalized to 0-1000 scale (NOT 0-1, NOT pixel coordinates)\n"
-    "- Provide accurate confidence scores (0.0-1.0)\n"
-    "- For faces: emotion field is MANDATORY\n"
-    "- DO NOT skip large, prominent objects - elephants, cars, logos MUST be detected\n"
-    "- If an animal or object occupies >20% of the image, it MUST be in your response\n"
-    "- Return valid JSON matching the exact schema provided\n"
-    "- Prioritize detecting ALL visible elements, especially main subjects\n"
-    "- When in doubt, include the object rather than excluding it\n\n"
-    
-    "**EXAMPLE OUTPUT:**\n"
-    "For a thumbnail with an elephant and text:\n"
-    "{\n"
-    "  \"detected_objects\": [\n"
-    "    {\n"
-    "      \"label\": \"elephant\",\n"
-    "      \"bbox_normalized\": [200, 400, 800, 900],\n"
-    "      \"confidence\": 0.92\n"
-    "    },\n"
-    "    {\n"
-    "      \"label\": \"text_overlay\",\n"
-    "      \"bbox_normalized\": [300, 50, 700, 150],\n"
-    "      \"confidence\": 0.88\n"
-    "    }\n"
-    "  ],\n"
-    "  \"face_count\": 0,\n"
-    "  \"detected_emotion\": null\n"
-    "}"
-)
+DETECTION_SYSTEM_INSTRUCTION = """You are a YouTube Thumbnail Object Detection AI. Your ONLY job is to detect and locate ALL visible objects, text, and faces in the image.
+
+**CORE MISSION: DETECT EVERYTHING YOU SEE**
+
+YOU MUST DETECT (in order of priority):
+
+1. **PEOPLE & FACES** (HIGHEST PRIORITY)
+   - ANY human face, person, or human-like figure
+   - Partial faces, side profiles, back of heads
+   - Multiple people in the same image
+   - For each face/person, provide emotion: 'Shocked', 'Excited', 'Determined', 'Smirking', 'Angry', 'Fear', 'Happy', 'Sad', 'Surprised', 'Neutral'
+   - Label: 'face', 'person', or 'human'
+
+2. **CREATURES & CHARACTERS**
+   - Zombies, monsters, aliens, robots, superheroes, villains
+   - Fantasy creatures, animals (lions, elephants, dogs, cats, birds, dinosaurs)
+   - Animated characters, cartoon figures
+   - Label with specific name: 'zombie', 'monster', 'alien', 'robot', 'lion', 'elephant', etc.
+
+3. **TEXT OVERLAYS** (CRITICAL)
+   - ALL visible text regions, titles, captions, words
+   - Even single words or letters
+   - Label as: 'text_overlay' or 'text'
+
+4. **OBJECTS & ITEMS**
+   - Weapons (guns, swords, bats, knives)
+   - Vehicles (cars, planes, motorcycles, trucks)
+   - Electronics (phones, cameras, computers, controllers)
+   - Tools and equipment
+   - Sports items (balls, rackets, bats)
+   - Food items
+   - Label with specific name
+
+5. **LOGOS & BRANDING**
+   - YouTube logo, brand logos, company marks
+   - Social media icons
+   - Label: 'youtube_logo', 'brand_logo', etc.
+
+6. **VISUAL EFFECTS**
+   - Fire, explosions, smoke, lightning
+   - Arrows, circles, highlights, annotations
+   - Glowing effects, particle effects
+   - Label descriptively: 'fire_effect', 'arrow_pointer', etc.
+
+**CRITICAL RULES:**
+
+✅ **SIZE THRESHOLD**: If ANY object occupies more than 15% of the image area, you MUST detect it
+✅ **VISIBILITY THRESHOLD**: If you can see it, detect it - no exceptions
+✅ **PROMINENCE RULE**: The most prominent/largest objects are TOP PRIORITY
+✅ **MULTIPLE INSTANCES**: If there are 2 zombies, detect both separately
+✅ **TEXT RULE**: If there's ANY readable text, detect the text region(s)
+
+❌ **NEVER skip large, obvious subjects** - this is your #1 priority
+❌ **NEVER return empty detected_objects if there are visible elements**
+❌ **NEVER ignore the main subject of the thumbnail**
+
+**BOUNDING BOX FORMAT:**
+- Use normalized coordinates: [x_min, y_min, x_max, y_max]
+- Scale: 0-1000 (NOT 0-1, NOT pixels)
+- Example: [100, 200, 600, 800] means object spans from 10% to 60% horizontally
+
+**CONFIDENCE SCORES:**
+- 0.95-1.0: Extremely clear and obvious
+- 0.85-0.94: Very clear
+- 0.70-0.84: Clear but partially obscured
+- 0.60-0.69: Visible but challenging
+
+**OUTPUT FORMAT EXAMPLE:**
+For a thumbnail with a zombie and a person with text:
+```json
+{
+  "detected_objects": [
+    {
+      "label": "zombie",
+      "bbox_normalized": [50, 100, 600, 900],
+      "confidence": 0.95
+    },
+    {
+      "label": "person",
+      "bbox_normalized": [650, 200, 950, 850],
+      "confidence": 0.92,
+      "emotion": "Fear"
+    },
+    {
+      "label": "text_overlay",
+      "bbox_normalized": [100, 50, 500, 200],
+      "confidence": 0.88
+    }
+  ],
+  "face_count": 1,
+  "detected_emotion": "Fear"
+}
+```
+
+**SELF-CHECK BEFORE RESPONDING:**
+1. Did I detect the LARGEST object in the image? ✓
+2. Did I detect ALL visible faces/people? ✓
+3. Did I detect ALL text regions? ✓
+4. Is detected_objects empty when there are obvious elements? ✗ (This should NEVER happen)
+
+REMEMBER: Your goal is MAXIMUM DETECTION, not minimal detection. When in doubt, INCLUDE the object."""
 
 
 def get_all_detection_data(image_bytes: bytes) -> Dict:
@@ -146,17 +192,32 @@ def get_all_detection_data(image_bytes: bytes) -> Dict:
     # Create clean schema
     clean_schema = get_clean_schema_for_gemini(GeminiAllDetection)
     
+    # IMPROVED: Add explicit user prompt to force detection
+    user_prompt = """Analyze this YouTube thumbnail image carefully. 
+
+MANDATORY TASKS:
+1. Identify and locate EVERY visible object, character, person, and text region
+2. The LARGEST/most prominent subjects MUST be detected first
+3. Provide bounding boxes for ALL elements you can see
+4. For any faces/people, specify their emotion
+
+START your analysis by describing what you see, then provide the JSON with ALL detections.
+
+Remember: Empty detected_objects array is ONLY acceptable if the image is completely blank."""
+    
     config = types.GenerateContentConfig(
         system_instruction=DETECTION_SYSTEM_INSTRUCTION,
         response_mime_type="application/json",
         response_schema=clean_schema,
-        temperature=0.2
+        temperature=0.1,  # Lower temperature for more consistent detection
+        top_p=0.95,
+        top_k=40
     )
 
     try:
         response = client.models.generate_content(
             model='gemini-2.0-flash-exp',
-            contents=[image_part],
+            contents=[image_part, user_prompt],  # Added explicit prompt
             config=config
         )
         
@@ -166,6 +227,14 @@ def get_all_detection_data(image_bytes: bytes) -> Dict:
         if "detected_objects" not in result:
             print("⚠️ Gemini returned result without 'detected_objects' key")
             result["detected_objects"] = []
+        
+        # WARNING: If no objects detected, log it prominently
+        if len(result["detected_objects"]) == 0:
+            print("⚠️⚠️⚠️ WARNING: Gemini returned ZERO detected objects!")
+            print("⚠️⚠️⚠️ This likely indicates a detection failure. Consider:")
+            print("   1. Image may be corrupted or unreadable")
+            print("   2. Gemini API may be having issues")
+            print("   3. Image format may not be compatible")
         
         # Calculate face count and dominant emotion from detected objects
         faces = [
@@ -198,7 +267,10 @@ def get_all_detection_data(image_bytes: bytes) -> Dict:
             for obj in result['detected_objects']:
                 label = obj.get('label', 'unknown')
                 confidence = obj.get('confidence', 0)
-                print(f"      - {label} (confidence: {confidence:.2f})")
+                bbox = obj.get('bbox_normalized', [])
+                print(f"      - {label} (confidence: {confidence:.2f}, bbox: {bbox})")
+        else:
+            print("   ⚠️ NO OBJECTS DETECTED - This may indicate an issue")
         
         return result
         
@@ -212,6 +284,8 @@ def get_all_detection_data(image_bytes: bytes) -> Dict:
         }
     except Exception as e:
         print(f"❌ Gemini all detection error: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "detected_objects": [],
             "face_count": 0,

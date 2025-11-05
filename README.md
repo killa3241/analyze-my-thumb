@@ -55,6 +55,7 @@ cd <YOUR_PROJECT_NAME>
 
 # Install dependencies
 npm install
+npm install html2canvas jspdf
 
 # Start development server
 npm run dev

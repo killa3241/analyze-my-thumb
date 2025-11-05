@@ -11,7 +11,7 @@ interface AnalyzeInput {
 
 export const useCompareThumbnails = () => {
   const [thumbnailA, setThumbnailA] = useState<ThumbnailState>({
-    previewUrl: null,
+    previewUrl: '',  // Changed from null to empty string
     result: null,
     isAnalyzing: false,
     error: null,
@@ -19,7 +19,7 @@ export const useCompareThumbnails = () => {
   });
 
   const [thumbnailB, setThumbnailB] = useState<ThumbnailState>({
-    previewUrl: null,
+    previewUrl: '',  // Changed from null to empty string
     result: null,
     isAnalyzing: false,
     error: null,
@@ -139,23 +139,23 @@ export const useCompareThumbnails = () => {
   };
 
   const setPreviewUrlA = (url: string | null) => {
-    setThumbnailA(prev => ({ ...prev, previewUrl: url }));
+    setThumbnailA(prev => ({ ...prev, previewUrl: url || '' }));  // Convert null to empty string
   };
 
   const setPreviewUrlB = (url: string | null) => {
-    setThumbnailB(prev => ({ ...prev, previewUrl: url }));
+    setThumbnailB(prev => ({ ...prev, previewUrl: url || '' }));  // Convert null to empty string
   };
 
   const resetComparison = () => {
     setThumbnailA({
-      previewUrl: null,
+      previewUrl: '',  // Changed from null to empty string
       result: null,
       isAnalyzing: false,
       error: null,
       progress: 0
     });
     setThumbnailB({
-      previewUrl: null,
+      previewUrl: '',  // Changed from null to empty string
       result: null,
       isAnalyzing: false,
       error: null,

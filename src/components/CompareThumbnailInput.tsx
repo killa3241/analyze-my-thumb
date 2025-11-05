@@ -20,7 +20,7 @@ export const CompareThumbnailInput: React.FC<CompareThumbnailInputProps> = ({
   error
 }) => {
   const [inputMethod, setInputMethod] = useState<'upload' | 'url'>('upload');
-  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [youtubeUrl, setYoutubeUrl] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sideColors = {
@@ -42,31 +42,6 @@ export const CompareThumbnailInput: React.FC<CompareThumbnailInputProps> = ({
 
   const colors = sideColors[side];
 
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        onPreviewChange(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleAnalyze = () => {
-    if (inputMethod === 'upload' && fileInputRef.current?.files?.[0]) {
-      onAnalyze({ type: 'file', file: fileInputRef.current.files[0] });
-    } else if (inputMethod === 'url' && youtubeUrl) {
-      onAnalyze({ type: 'url', url: youtubeUrl });
-      
-      // Extract thumbnail from YouTube URL
-      const videoId = extractYouTubeVideoId(youtubeUrl);
-      if (videoId) {
-        onPreviewChange(`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`);
-      }
-    }
-  };
-
   const extractYouTubeVideoId = (url: string): string | null => {
     const patterns = [
       /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
@@ -80,7 +55,63 @@ export const CompareThumbnailInput: React.FC<CompareThumbnailInputProps> = ({
     return null;
   };
 
-  const canAnalyze = previewUrl && !isAnalyzing;
+  const handleInputMethodChange = (method: 'upload' | 'url') => {
+    setInputMethod(method);
+    // Clear preview and data when switching methods
+    onPreviewChange(null);
+    setYoutubeUrl('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        onPreviewChange(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleUrlChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const url = e.target.value || '';
+    setYoutubeUrl(url);
+    
+    // Auto-preview YouTube thumbnail when URL is entered
+    if (url.trim()) {
+      const videoId = extractYouTubeVideoId(url);
+      if (videoId) {
+        onPreviewChange(`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`);
+      }
+    } else {
+      onPreviewChange(null);
+    }
+  };
+
+  const handleAnalyze = () => {
+    if (inputMethod === 'upload' && fileInputRef.current?.files?.[0]) {
+      onAnalyze({ type: 'file', file: fileInputRef.current.files[0] });
+    } else if (inputMethod === 'url' && youtubeUrl.trim()) {
+      // Extract thumbnail from YouTube URL before analyzing
+      const videoId = extractYouTubeVideoId(youtubeUrl);
+      if (videoId) {
+        const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+        onPreviewChange(thumbnailUrl);
+        onAnalyze({ type: 'url', url: youtubeUrl });
+      } else {
+        // If it's not a valid YouTube URL, still try to analyze
+        onAnalyze({ type: 'url', url: youtubeUrl });
+      }
+    }
+  };
+
+  const canAnalyze = !isAnalyzing && (
+    (inputMethod === 'upload' && fileInputRef.current?.files?.[0]) ||
+    (inputMethod === 'url' && youtubeUrl.trim())
+  );
 
   return (
     <div className={`border-2 ${colors.border} rounded-xl p-4 ${colors.bg} backdrop-blur-sm transition-all duration-300 hover:shadow-lg ${colors.glow}`}>
@@ -91,7 +122,7 @@ export const CompareThumbnailInput: React.FC<CompareThumbnailInputProps> = ({
         </h3>
         <div className="flex gap-2">
           <button
-            onClick={() => setInputMethod('upload')}
+            onClick={() => handleInputMethodChange('upload')}
             className={`px-3 py-1 rounded-lg text-sm transition-all ${
               inputMethod === 'upload'
                 ? `bg-gradient-to-r ${colors.gradient} text-white`
@@ -102,7 +133,7 @@ export const CompareThumbnailInput: React.FC<CompareThumbnailInputProps> = ({
             Upload
           </button>
           <button
-            onClick={() => setInputMethod('url')}
+            onClick={() => handleInputMethodChange('url')}
             className={`px-3 py-1 rounded-lg text-sm transition-all ${
               inputMethod === 'url'
                 ? `bg-gradient-to-r ${colors.gradient} text-white`
@@ -141,7 +172,8 @@ export const CompareThumbnailInput: React.FC<CompareThumbnailInputProps> = ({
           <input
             type="text"
             value={youtubeUrl}
-            onChange={(e) => setYoutubeUrl(e.target.value)}
+            onChange={handleUrlChange}
+            disabled={isAnalyzing}
             placeholder="Paste YouTube URL or Video ID"
             className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-all"
           />
@@ -149,21 +181,21 @@ export const CompareThumbnailInput: React.FC<CompareThumbnailInputProps> = ({
       )}
 
       {/* Preview */}
-      {previewUrl && (
-        <div className="mb-4 relative">
-          <img
-            src={previewUrl}
-            alt={`Thumbnail ${side} preview`}
-            className="w-full rounded-lg border-2 border-gray-700"
-          />
-          {isAnalyzing && (
-            <div className="absolute inset-0 bg-black/70 rounded-lg flex items-center justify-center">
-              <Loader2 className={`w-8 h-8 animate-spin ${colors.text}`} />
-            </div>
-          )}
-        </div>
+      {previewUrl && previewUrl !== '' && (
+      <div className="mb-4 relative">
+        <img
+          src={previewUrl}
+          alt={`Thumbnail ${side} preview`}
+          className="w-full rounded-lg border-2 border-gray-700"
+        />
+        {isAnalyzing && (
+          <div className="absolute inset-0 bg-black/70 rounded-lg flex items-center justify-center">
+            <Loader2 className={`w-8 h-8 animate-spin ${colors.text}`} />
+          </div>
+        )}
+      </div>
       )}
-
+      
       {/* Error */}
       {error && (
         <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg">

@@ -146,20 +146,20 @@ async def analyze_thumbnail(
         )
         
         print("✅ Analysis complete!")
-        print(f"   📊 Results:")
-        print(f"      - Brightness: {analysis_data['average_brightness']:.2f}")
-        print(f"      - Contrast: {analysis_data['contrast_level']:.2f}")
-        print(f"      - Text: '{analysis_data['text_content']}'")
-        print(f"      - Faces: {analysis_data['face_count']} (emotion: {analysis_data.get('detected_emotion', 'N/A')})")
-        print(f"      - Objects: {len(analysis_data['detected_objects'])}")
+        print(f"  📊 Results:")
+        print(f" - Brightness: {analysis_data['average_brightness']:.2f}")
+        print(f" - Contrast: {analysis_data['contrast_level']:.2f}")
+        print(f" - Text: '{analysis_data['text_content']}'")
+        print(f" - Faces: {analysis_data['face_count']} (emotion: {analysis_data.get('detected_emotion', 'N/A')})")
+        print(f" - Objects: {len(analysis_data['detected_objects'])}")
         
         # ... (rest of logging and STEP 3 & 4 remain the same) ...
         if analysis_data['detected_objects']:
-            print(f"   🎯 Detected Objects:")
+            print(f" 🎯 Detected Objects:")
             for obj in analysis_data['detected_objects']:
-                print(f"      - {obj.get('label', 'unknown')} (contrast: {obj.get('contrast_score_vs_bg', 0):.3f})")
+                print(f"- {obj.get('label', 'unknown')} (contrast: {obj.get('contrast_score_vs_bg', 0):.3f})")
         else:
-            print(f"   ⚠️ No objects detected")
+            print(f" ⚠️ No objects detected")
         
         # ===== STEP 3: Generate AI Feedback =====
         print("💡 Generating AI suggestions...")
